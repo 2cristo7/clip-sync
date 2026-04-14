@@ -12,6 +12,9 @@
 		A00000000000000000000303 /* Hummingbird in Frameworks */ = {isa = PBXBuildFile; productRef = A00000000000000000000302 /* Hummingbird */; };
 		A00000000000000000000402 /* ClipServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000401 /* ClipServer.swift */; };
 		A00000000000000000000404 /* ServerConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000403 /* ServerConfig.swift */; };
+		A00000000000000000000502 /* ClipPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000501 /* ClipPayload.swift */; };
+		A00000000000000000000504 /* PasteboardWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000503 /* PasteboardWatcher.swift */; };
+		A00000000000000000000506 /* PasteboardInjector.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000505 /* PasteboardInjector.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -21,6 +24,9 @@
 		A00000000000000000000103 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A00000000000000000000401 /* ClipServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipServer.swift; sourceTree = "<group>"; };
 		A00000000000000000000403 /* ServerConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerConfig.swift; sourceTree = "<group>"; };
+		A00000000000000000000501 /* ClipPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipPayload.swift; sourceTree = "<group>"; };
+		A00000000000000000000503 /* PasteboardWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteboardWatcher.swift; sourceTree = "<group>"; };
+		A00000000000000000000505 /* PasteboardInjector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteboardInjector.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -47,6 +53,7 @@
 			isa = PBXGroup;
 			children = (
 				A000000000000000000000F1 /* App.swift */,
+				A00000000000000000000500 /* Clipboard */,
 				A000000000000000000000B3 /* Server */,
 				A00000000000000000000103 /* Assets.xcassets */,
 				A00000000000000000000102 /* Info.plist */,
@@ -69,6 +76,16 @@
 				A000000000000000000000C1 /* ClipSync.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		A00000000000000000000500 /* Clipboard */ = {
+			isa = PBXGroup;
+			children = (
+				A00000000000000000000501 /* ClipPayload.swift */,
+				A00000000000000000000503 /* PasteboardWatcher.swift */,
+				A00000000000000000000505 /* PasteboardInjector.swift */,
+			);
+			path = Clipboard;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -149,6 +166,9 @@
 				A000000000000000000000F2 /* App.swift in Sources */,
 				A00000000000000000000402 /* ClipServer.swift in Sources */,
 				A00000000000000000000404 /* ServerConfig.swift in Sources */,
+				A00000000000000000000502 /* ClipPayload.swift in Sources */,
+				A00000000000000000000504 /* PasteboardWatcher.swift in Sources */,
+				A00000000000000000000506 /* PasteboardInjector.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
