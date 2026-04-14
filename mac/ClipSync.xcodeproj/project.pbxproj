@@ -10,9 +10,26 @@
 		A000000000000000000000F2 /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000F1 /* App.swift */; };
 		A00000000000000000000104 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000103 /* Assets.xcassets */; };
 		A00000000000000000000303 /* Hummingbird in Frameworks */ = {isa = PBXBuildFile; productRef = A00000000000000000000302 /* Hummingbird */; };
+		A00000000000000000000305 /* HummingbirdWebSocket in Frameworks */ = {isa = PBXBuildFile; productRef = A00000000000000000000304 /* HummingbirdWebSocket */; };
 		A00000000000000000000402 /* ClipServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000401 /* ClipServer.swift */; };
 		A00000000000000000000404 /* ServerConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000403 /* ServerConfig.swift */; };
+		A00000000000000000000406 /* WebSocketHub.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000405 /* WebSocketHub.swift */; };
+		A00000000000000000000502 /* ClipPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000501 /* ClipPayload.swift */; };
+		A00000000000000000000504 /* PasteboardWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000503 /* PasteboardWatcher.swift */; };
+		A00000000000000000000506 /* PasteboardInjector.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000505 /* PasteboardInjector.swift */; };
+		A00000000000000000000702 /* PasteboardRoundtripTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000701 /* PasteboardRoundtripTests.swift */; };
+		A00000000000000000000704 /* ClipPayloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000703 /* ClipPayloadTests.swift */; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A00000000000000000000602 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A000000000000000000000A1 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A000000000000000000000D1;
+			remoteInfo = ClipSync;
+		};
+/* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		A000000000000000000000C1 /* ClipSync.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ClipSync.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -21,6 +38,13 @@
 		A00000000000000000000103 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A00000000000000000000401 /* ClipServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipServer.swift; sourceTree = "<group>"; };
 		A00000000000000000000403 /* ServerConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerConfig.swift; sourceTree = "<group>"; };
+		A00000000000000000000405 /* WebSocketHub.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSocketHub.swift; sourceTree = "<group>"; };
+		A00000000000000000000501 /* ClipPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipPayload.swift; sourceTree = "<group>"; };
+		A00000000000000000000503 /* PasteboardWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteboardWatcher.swift; sourceTree = "<group>"; };
+		A00000000000000000000505 /* PasteboardInjector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteboardInjector.swift; sourceTree = "<group>"; };
+		A00000000000000000000601 /* ClipSyncTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ClipSyncTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A00000000000000000000701 /* PasteboardRoundtripTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteboardRoundtripTests.swift; sourceTree = "<group>"; };
+		A00000000000000000000703 /* ClipPayloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipPayloadTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -29,6 +53,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				A00000000000000000000303 /* Hummingbird in Frameworks */,
+				A00000000000000000000305 /* HummingbirdWebSocket in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A00000000000000000000603 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -39,6 +71,7 @@
 			isa = PBXGroup;
 			children = (
 				A000000000000000000000B2 /* ClipSync */,
+				A00000000000000000000700 /* ClipSyncTests */,
 				A000000000000000000000B4 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -47,6 +80,7 @@
 			isa = PBXGroup;
 			children = (
 				A000000000000000000000F1 /* App.swift */,
+				A00000000000000000000500 /* Clipboard */,
 				A000000000000000000000B3 /* Server */,
 				A00000000000000000000103 /* Assets.xcassets */,
 				A00000000000000000000102 /* Info.plist */,
@@ -59,6 +93,7 @@
 			children = (
 				A00000000000000000000401 /* ClipServer.swift */,
 				A00000000000000000000403 /* ServerConfig.swift */,
+				A00000000000000000000405 /* WebSocketHub.swift */,
 			);
 			path = Server;
 			sourceTree = "<group>";
@@ -67,8 +102,28 @@
 			isa = PBXGroup;
 			children = (
 				A000000000000000000000C1 /* ClipSync.app */,
+				A00000000000000000000601 /* ClipSyncTests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		A00000000000000000000500 /* Clipboard */ = {
+			isa = PBXGroup;
+			children = (
+				A00000000000000000000501 /* ClipPayload.swift */,
+				A00000000000000000000503 /* PasteboardWatcher.swift */,
+				A00000000000000000000505 /* PasteboardInjector.swift */,
+			);
+			path = Clipboard;
+			sourceTree = "<group>";
+		};
+		A00000000000000000000700 /* ClipSyncTests */ = {
+			isa = PBXGroup;
+			children = (
+				A00000000000000000000703 /* ClipPayloadTests.swift */,
+				A00000000000000000000701 /* PasteboardRoundtripTests.swift */,
+			);
+			path = ClipSyncTests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -89,10 +144,29 @@
 			name = ClipSync;
 			packageProductDependencies = (
 				A00000000000000000000302 /* Hummingbird */,
+				A00000000000000000000304 /* HummingbirdWebSocket */,
 			);
 			productName = ClipSync;
 			productReference = A000000000000000000000C1 /* ClipSync.app */;
 			productType = "com.apple.product-type.application";
+		};
+		A00000000000000000000600 /* ClipSyncTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A00000000000000000000608 /* Build configuration list for PBXNativeTarget "ClipSyncTests" */;
+			buildPhases = (
+				A00000000000000000000604 /* Sources */,
+				A00000000000000000000603 /* Frameworks */,
+				A00000000000000000000605 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A00000000000000000000607 /* PBXTargetDependency */,
+			);
+			name = ClipSyncTests;
+			productName = ClipSyncTests;
+			productReference = A00000000000000000000601 /* ClipSyncTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
 		};
 /* End PBXNativeTarget section */
 
@@ -107,6 +181,10 @@
 					A000000000000000000000D1 = {
 						CreatedOnToolsVersion = 15.0;
 					};
+					A00000000000000000000600 = {
+						CreatedOnToolsVersion = 15.0;
+						TestTargetID = A000000000000000000000D1;
+					};
 				};
 			};
 			buildConfigurationList = A00000000000000000000205 /* Build configuration list for PBXProject "ClipSync" */;
@@ -120,12 +198,14 @@
 			mainGroup = A000000000000000000000B1;
 			packageReferences = (
 				A00000000000000000000301 /* XCRemoteSwiftPackageReference "hummingbird" */,
+				A00000000000000000000311 /* XCRemoteSwiftPackageReference "hummingbird-websocket" */,
 			);
 			productRefGroup = A000000000000000000000B4 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
 				A000000000000000000000D1 /* ClipSync */,
+				A00000000000000000000600 /* ClipSyncTests */,
 			);
 		};
 /* End PBXProject section */
@@ -139,6 +219,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A00000000000000000000605 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -149,10 +236,31 @@
 				A000000000000000000000F2 /* App.swift in Sources */,
 				A00000000000000000000402 /* ClipServer.swift in Sources */,
 				A00000000000000000000404 /* ServerConfig.swift in Sources */,
+				A00000000000000000000406 /* WebSocketHub.swift in Sources */,
+				A00000000000000000000502 /* ClipPayload.swift in Sources */,
+				A00000000000000000000504 /* PasteboardWatcher.swift in Sources */,
+				A00000000000000000000506 /* PasteboardInjector.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A00000000000000000000604 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A00000000000000000000702 /* PasteboardRoundtripTests.swift in Sources */,
+				A00000000000000000000704 /* ClipPayloadTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A00000000000000000000607 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A000000000000000000000D1 /* ClipSync */;
+			targetProxy = A00000000000000000000602 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		A00000000000000000000201 /* Debug */ = {
@@ -321,6 +429,44 @@
 			};
 			name = Release;
 		};
+		A00000000000000000000609 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_IDENTITY = "-";
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.clipsync.ClipSyncTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.9;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ClipSync.app/Contents/MacOS/ClipSync";
+			};
+			name = Debug;
+		};
+		A0000000000000000000060A /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_IDENTITY = "-";
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.clipsync.ClipSyncTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.9;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ClipSync.app/Contents/MacOS/ClipSync";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -342,12 +488,29 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		A00000000000000000000608 /* Build configuration list for PBXNativeTarget "ClipSyncTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A00000000000000000000609 /* Debug */,
+				A0000000000000000000060A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
 		A00000000000000000000301 /* XCRemoteSwiftPackageReference "hummingbird" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/hummingbird-project/hummingbird.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.0.0;
+			};
+		};
+		A00000000000000000000311 /* XCRemoteSwiftPackageReference "hummingbird-websocket" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/hummingbird-project/hummingbird-websocket.git";
 			requirement = {
 				kind = upToNextMajorVersion;
 				minimumVersion = 2.0.0;
@@ -360,6 +523,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = A00000000000000000000301 /* XCRemoteSwiftPackageReference "hummingbird" */;
 			productName = Hummingbird;
+		};
+		A00000000000000000000304 /* HummingbirdWebSocket */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A00000000000000000000311 /* XCRemoteSwiftPackageReference "hummingbird-websocket" */;
+			productName = HummingbirdWebSocket;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -14,16 +14,34 @@ struct ClipSyncApp: App {
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
-    private let server = ClipServer()
+    private let hub = WebSocketHub()
+    private let watcher = PasteboardWatcher()
+    private lazy var injector = PasteboardInjector(watcher: watcher)
+    private lazy var server = ClipServer(hub: hub, injector: injector)
+    private var broadcastTask: Task<Void, Never>?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         installStatusItem()
-        server.start()
+        startPipeline()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        broadcastTask?.cancel()
+        watcher.stop()
         server.stop()
+    }
+
+    private func startPipeline() {
+        let hub = self.hub
+        let stream = watcher.events()
+        broadcastTask = Task.detached(priority: .utility) {
+            for await payload in stream {
+                await hub.broadcast(payload)
+            }
+        }
+        watcher.start()
+        server.start()
     }
 
     private func installStatusItem() {
