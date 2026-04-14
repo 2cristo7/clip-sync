@@ -10,8 +10,10 @@
 		A000000000000000000000F2 /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = A000000000000000000000F1 /* App.swift */; };
 		A00000000000000000000104 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000103 /* Assets.xcassets */; };
 		A00000000000000000000303 /* Hummingbird in Frameworks */ = {isa = PBXBuildFile; productRef = A00000000000000000000302 /* Hummingbird */; };
+		A00000000000000000000305 /* HummingbirdWebSocket in Frameworks */ = {isa = PBXBuildFile; productRef = A00000000000000000000304 /* HummingbirdWebSocket */; };
 		A00000000000000000000402 /* ClipServer.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000401 /* ClipServer.swift */; };
 		A00000000000000000000404 /* ServerConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000403 /* ServerConfig.swift */; };
+		A00000000000000000000406 /* WebSocketHub.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000405 /* WebSocketHub.swift */; };
 		A00000000000000000000502 /* ClipPayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000501 /* ClipPayload.swift */; };
 		A00000000000000000000504 /* PasteboardWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000503 /* PasteboardWatcher.swift */; };
 		A00000000000000000000506 /* PasteboardInjector.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000505 /* PasteboardInjector.swift */; };
@@ -24,6 +26,7 @@
 		A00000000000000000000103 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A00000000000000000000401 /* ClipServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipServer.swift; sourceTree = "<group>"; };
 		A00000000000000000000403 /* ServerConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ServerConfig.swift; sourceTree = "<group>"; };
+		A00000000000000000000405 /* WebSocketHub.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebSocketHub.swift; sourceTree = "<group>"; };
 		A00000000000000000000501 /* ClipPayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipPayload.swift; sourceTree = "<group>"; };
 		A00000000000000000000503 /* PasteboardWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteboardWatcher.swift; sourceTree = "<group>"; };
 		A00000000000000000000505 /* PasteboardInjector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PasteboardInjector.swift; sourceTree = "<group>"; };
@@ -35,6 +38,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A00000000000000000000303 /* Hummingbird in Frameworks */,
+				A00000000000000000000305 /* HummingbirdWebSocket in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -66,6 +70,7 @@
 			children = (
 				A00000000000000000000401 /* ClipServer.swift */,
 				A00000000000000000000403 /* ServerConfig.swift */,
+				A00000000000000000000405 /* WebSocketHub.swift */,
 			);
 			path = Server;
 			sourceTree = "<group>";
@@ -106,6 +111,7 @@
 			name = ClipSync;
 			packageProductDependencies = (
 				A00000000000000000000302 /* Hummingbird */,
+				A00000000000000000000304 /* HummingbirdWebSocket */,
 			);
 			productName = ClipSync;
 			productReference = A000000000000000000000C1 /* ClipSync.app */;
@@ -137,6 +143,7 @@
 			mainGroup = A000000000000000000000B1;
 			packageReferences = (
 				A00000000000000000000301 /* XCRemoteSwiftPackageReference "hummingbird" */,
+				A00000000000000000000311 /* XCRemoteSwiftPackageReference "hummingbird-websocket" */,
 			);
 			productRefGroup = A000000000000000000000B4 /* Products */;
 			projectDirPath = "";
@@ -166,6 +173,7 @@
 				A000000000000000000000F2 /* App.swift in Sources */,
 				A00000000000000000000402 /* ClipServer.swift in Sources */,
 				A00000000000000000000404 /* ServerConfig.swift in Sources */,
+				A00000000000000000000406 /* WebSocketHub.swift in Sources */,
 				A00000000000000000000502 /* ClipPayload.swift in Sources */,
 				A00000000000000000000504 /* PasteboardWatcher.swift in Sources */,
 				A00000000000000000000506 /* PasteboardInjector.swift in Sources */,
@@ -373,6 +381,14 @@
 				minimumVersion = 2.0.0;
 			};
 		};
+		A00000000000000000000311 /* XCRemoteSwiftPackageReference "hummingbird-websocket" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/hummingbird-project/hummingbird-websocket.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -380,6 +396,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = A00000000000000000000301 /* XCRemoteSwiftPackageReference "hummingbird" */;
 			productName = Hummingbird;
+		};
+		A00000000000000000000304 /* HummingbirdWebSocket */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A00000000000000000000311 /* XCRemoteSwiftPackageReference "hummingbird-websocket" */;
+			productName = HummingbirdWebSocket;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

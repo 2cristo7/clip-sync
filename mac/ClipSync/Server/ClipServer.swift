@@ -1,29 +1,46 @@
 import Foundation
 import Hummingbird
+import HummingbirdWebSocket
 import Logging
 
 final class ClipServer {
     private let config: ServerConfig
     private var logger: Logger
+    private let hub: WebSocketHub
     private var runTask: Task<Void, Never>?
 
-    init(config: ServerConfig = .default) {
+    init(config: ServerConfig = .default, hub: WebSocketHub) {
         self.config = config
         var logger = Logger(label: "clipsync.server")
         logger.logLevel = config.logLevel
         self.logger = logger
+        self.hub = hub
     }
 
     func start() {
         guard runTask == nil else { return }
         let config = self.config
         let logger = self.logger
+        let hub = self.hub
 
         runTask = Task.detached(priority: .userInitiated) {
             do {
                 let router = Self.makeRouter()
                 let app = Application(
                     router: router,
+                    server: .http1WebSocketUpgrade { request, _, logger in
+                        guard request.path == "/ws" else { return .dontUpgrade }
+                        return .upgrade([:]) { inbound, outbound, _ in
+                            let client = WebSocketHub.Client(outbound: outbound)
+                            await hub.register(client)
+                            do {
+                                for try await _ in inbound { }
+                            } catch {
+                                logger.debug("WebSocket ended: \(error)")
+                            }
+                            await hub.unregister(client)
+                        }
+                    },
                     configuration: .init(
                         address: .hostname(config.host, port: config.port),
                         serverName: "ClipSync"
