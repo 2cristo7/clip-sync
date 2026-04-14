@@ -14,13 +14,17 @@ struct ClipSyncApp: App {
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
+    private let server = ClipServer()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         installStatusItem()
+        server.start()
     }
 
-    func applicationWillTerminate(_ notification: Notification) {}
+    func applicationWillTerminate(_ notification: Notification) {
+        server.stop()
+    }
 
     private func installStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
