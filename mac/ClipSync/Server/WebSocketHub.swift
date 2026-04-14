@@ -2,16 +2,33 @@ import Foundation
 import HummingbirdWebSocket
 import Logging
 
+struct ClipClientInfo: Sendable, Hashable {
+    let id: UUID
+    let remoteAddress: String?
+    let connectedAt: Date
+    let lastSeen: Date
+}
+
 actor WebSocketHub {
-    final class Client: Hashable, Sendable {
+    final class Client: Hashable, @unchecked Sendable {
         let id: UUID
         let outbound: WebSocketOutboundWriter
         let sourceTag: String?
+        let remoteAddress: String?
+        let connectedAt: Date
+        var lastSeen: Date
 
-        init(id: UUID = UUID(), outbound: WebSocketOutboundWriter, sourceTag: String? = nil) {
+        init(id: UUID = UUID(),
+             outbound: WebSocketOutboundWriter,
+             sourceTag: String? = nil,
+             remoteAddress: String? = nil,
+             connectedAt: Date = Date()) {
             self.id = id
             self.outbound = outbound
             self.sourceTag = sourceTag
+            self.remoteAddress = remoteAddress
+            self.connectedAt = connectedAt
+            self.lastSeen = connectedAt
         }
 
         static func == (lhs: Client, rhs: Client) -> Bool { lhs.id == rhs.id }
@@ -19,6 +36,7 @@ actor WebSocketHub {
     }
 
     private var clients: Set<Client> = []
+    private var continuations: [UUID: AsyncStream<[ClipClientInfo]>.Continuation] = [:]
     private var logger: Logger
 
     init(logger: Logger = Logger(label: "clipsync.ws.hub")) {
@@ -27,12 +45,35 @@ actor WebSocketHub {
 
     var clientCount: Int { clients.count }
 
+    func snapshot() -> [ClipClientInfo] {
+        clients
+            .map { ClipClientInfo(id: $0.id, remoteAddress: $0.remoteAddress, connectedAt: $0.connectedAt, lastSeen: $0.lastSeen) }
+            .sorted { $0.connectedAt < $1.connectedAt }
+    }
+
+    func events() -> AsyncStream<[ClipClientInfo]> {
+        AsyncStream { continuation in
+            let id = UUID()
+            continuations[id] = continuation
+            continuation.yield(snapshot())
+            continuation.onTermination = { [weak self] _ in
+                guard let self else { return }
+                Task { await self.removeContinuation(id) }
+            }
+        }
+    }
+
+    private func removeContinuation(_ id: UUID) {
+        continuations.removeValue(forKey: id)
+    }
+
     func register(_ client: Client) {
         clients.insert(client)
         logger.info("WebSocket client connected", metadata: [
             "id": .string(client.id.uuidString),
             "clients": .stringConvertible(clients.count),
         ])
+        notifyChange()
     }
 
     func unregister(_ client: Client) {
@@ -41,6 +82,20 @@ actor WebSocketHub {
             "id": .string(client.id.uuidString),
             "clients": .stringConvertible(clients.count),
         ])
+        notifyChange()
+    }
+
+    func touch(_ client: Client) {
+        guard let existing = clients.first(where: { $0 == client }) else { return }
+        existing.lastSeen = Date()
+        notifyChange()
+    }
+
+    private func notifyChange() {
+        let snap = snapshot()
+        for continuation in continuations.values {
+            continuation.yield(snap)
+        }
     }
 
     func broadcast(_ payload: ClipPayload) async {
@@ -56,16 +111,21 @@ actor WebSocketHub {
         }
 
         let snapshot = clients
+        var didChange = false
         for client in snapshot {
             do {
                 try await client.outbound.write(.text(text))
+                client.lastSeen = Date()
+                didChange = true
             } catch {
                 logger.debug("Dropping client after write failure", metadata: [
                     "id": .string(client.id.uuidString),
                     "error": .string(String(describing: error)),
                 ])
                 clients.remove(client)
+                didChange = true
             }
         }
+        if didChange { notifyChange() }
     }
 }

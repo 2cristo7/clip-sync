@@ -1,4 +1,6 @@
 import AppKit
+import Foundation
+import Logging
 import SwiftUI
 
 @main
@@ -12,24 +14,44 @@ struct ClipSyncApp: App {
     }
 }
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private var statusItem: NSStatusItem?
     private let hub = WebSocketHub()
     private let watcher = PasteboardWatcher()
     private lazy var injector = PasteboardInjector(watcher: watcher)
-    private lazy var server = ClipServer(hub: hub, injector: injector)
+    private let keychain = Keychain()
+    private var pairingSecret: Data = Data()
+    private lazy var pairing = PairingManager(secret: pairingSecret)
+    private lazy var server = ClipServer(hub: hub, injector: injector, pairing: pairing)
+    private lazy var menuBar = MenuBarController(
+        hub: hub,
+        onStartPairing: { [weak self] in self?.startPairing() },
+        onQuit: { NSApp.terminate(nil) }
+    )
+    private var advertiser: BonjourAdvertiser?
+    private let pairingWindow = PairingWindowController()
     private var broadcastTask: Task<Void, Never>?
+    private var logger = Logger(label: "clipsync.app")
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
-        installStatusItem()
+        do {
+            pairingSecret = try keychain.loadOrCreateSecret()
+        } catch {
+            logger.error("Failed to load/create pairing secret: \(error)")
+            pairingSecret = Data(count: 32)
+        }
+        menuBar.install()
         startPipeline()
+        startAdvertising()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
         broadcastTask?.cancel()
         watcher.stop()
         server.stop()
+        advertiser?.stop()
+        menuBar.tearDown()
     }
 
     private func startPipeline() {
@@ -44,31 +66,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         server.start()
     }
 
-    private func installStatusItem() {
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        if let button = item.button {
-            let image = NSImage(
-                systemSymbolName: "doc.on.clipboard",
-                accessibilityDescription: "ClipSync"
-            )
-            image?.isTemplate = true
-            button.image = image
-        }
-
-        let menu = NSMenu()
-        menu.addItem(
-            NSMenuItem(
-                title: "Quit ClipSync",
-                action: #selector(quit),
-                keyEquivalent: "q"
-            )
+    private func startAdvertising() {
+        let fp = PairingManager.fingerprint(of: pairingSecret)
+        let name = Self.deviceName()
+        let txt: [String: String] = [
+            "version": "0.1.0",
+            "name": name,
+            "fp": fp,
+        ]
+        let advertiser = BonjourAdvertiser(
+            port: Int32(ServerConfig.default.port),
+            serviceName: name,
+            txtRecord: txt
         )
-        menu.items.last?.target = self
-        item.menu = menu
-        self.statusItem = item
+        advertiser.start()
+        self.advertiser = advertiser
     }
 
-    @objc private func quit() {
-        NSApp.terminate(nil)
+    private static func deviceName() -> String {
+        let raw = ProcessInfo.processInfo.hostName
+        if let base = raw.components(separatedBy: ".").first, !base.isEmpty {
+            return base
+        }
+        return "ClipSync"
+    }
+
+    private func startPairing() {
+        Task { @MainActor in
+            do {
+                let session = try await pairing.startPairing()
+                let hostname = ProcessInfo.processInfo.hostName
+                pairingWindow.show(
+                    code: session.code,
+                    expiresAt: session.expiresAt,
+                    hostname: hostname,
+                    port: ServerConfig.default.port
+                )
+            } catch {
+                logger.error("Failed to start pairing: \(error)")
+            }
+        }
     }
 }
