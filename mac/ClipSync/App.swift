@@ -16,7 +16,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private let hub = WebSocketHub()
     private let watcher = PasteboardWatcher()
-    private lazy var server = ClipServer(hub: hub)
+    private lazy var injector = PasteboardInjector(watcher: watcher)
+    private lazy var server = ClipServer(hub: hub, injector: injector)
     private var broadcastTask: Task<Void, Never>?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
