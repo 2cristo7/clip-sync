@@ -4,22 +4,27 @@ import Hummingbird
 import HummingbirdWebSocket
 import Logging
 
+extension PairingResponse: ResponseEncodable {}
+
 final class ClipServer {
     private let config: ServerConfig
     private var logger: Logger
     private let hub: WebSocketHub
     private let injector: PasteboardInjector
+    private let pairing: PairingManager
     private var runTask: Task<Void, Never>?
 
     init(config: ServerConfig = .default,
          hub: WebSocketHub,
-         injector: PasteboardInjector) {
+         injector: PasteboardInjector,
+         pairing: PairingManager) {
         self.config = config
         var logger = Logger(label: "clipsync.server")
         logger.logLevel = config.logLevel
         self.logger = logger
         self.hub = hub
         self.injector = injector
+        self.pairing = pairing
     }
 
     func start() {
@@ -28,10 +33,16 @@ final class ClipServer {
         let logger = self.logger
         let hub = self.hub
         let injector = self.injector
+        let pairing = self.pairing
 
         runTask = Task.detached(priority: .userInitiated) {
             do {
-                let router = Self.makeRouter(hub: hub, injector: injector, logger: logger)
+                let router = Self.makeRouter(
+                    hub: hub,
+                    injector: injector,
+                    pairing: pairing,
+                    logger: logger
+                )
                 let app = Application(
                     router: router,
                     server: .http1WebSocketUpgrade { request, _, logger in
@@ -72,6 +83,7 @@ final class ClipServer {
 
     private static func makeRouter(hub: WebSocketHub,
                                    injector: PasteboardInjector,
+                                   pairing: PairingManager,
                                    logger: Logger) -> Router<BasicRequestContext> {
         let router = Router()
         router.get("/health") { _, _ -> HealthResponse in
@@ -93,6 +105,20 @@ final class ClipServer {
             }
             await hub.broadcast(payload)
             return InjectResponse(ok: true, nonce: payload.nonce)
+        }
+        router.get("/pair") { request, context -> PairingResponse in
+            guard let raw = request.uri.queryParameters["code"] else {
+                throw HTTPError(.badRequest, message: "missing code")
+            }
+            let code = String(raw)
+            do {
+                return try await pairing.consume(code: code)
+            } catch let error as PairingError {
+                context.logger.info("pair rejected", metadata: [
+                    "reason": .string(String(describing: error)),
+                ])
+                throw HTTPError(.unauthorized, message: String(describing: error))
+            }
         }
         return router
     }
