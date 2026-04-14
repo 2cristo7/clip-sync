@@ -43,8 +43,21 @@ final class ClipServer {
         runTask = nil
     }
 
+    private static let version = "0.1.0"
+    private static let platform = "macos"
+
     private static func makeRouter() -> Router<BasicRequestContext> {
-        Router()
+        let router = Router()
+        router.get("/health") { _, _ -> HealthResponse in
+            HealthResponse(ok: true, version: version, platform: platform)
+        }
+        return router
+    }
+
+    private struct HealthResponse: ResponseEncodable, Sendable {
+        let ok: Bool
+        let version: String
+        let platform: String
     }
 
     private static func logStartupError(
