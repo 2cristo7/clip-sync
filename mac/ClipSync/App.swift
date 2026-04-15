@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import Logging
+import NIOSSL
 import SwiftUI
 
 @main
@@ -22,7 +23,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let keychain = Keychain()
     private var pairingSecret: Data = Data()
     private lazy var pairing = PairingManager(secret: pairingSecret)
-    private lazy var server = ClipServer(hub: hub, injector: injector, pairing: pairing)
+    private let tokenStore = TokenStore()
+    private let tlsManager = TLSManager()
+    private lazy var hmacValidator = HMACValidator(secret: pairingSecret)
+    private var server: ClipServer?
     private lazy var menuBar = MenuBarController(
         hub: hub,
         onStartPairing: { [weak self] in self?.startPairing() },
@@ -41,7 +45,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             logger.error("Failed to load/create pairing secret: \(error)")
             pairingSecret = Data(count: 32)
         }
+        hmacValidator = HMACValidator(secret: pairingSecret)
+        var tlsConfig: TLSConfiguration? = nil
+        do {
+            try tlsManager.loadOrCreate()
+            tlsConfig = try tlsManager.makeServerTLSConfiguration()
+        } catch {
+            logger.error("Failed to initialise TLS identity: \(error)")
+        }
         menuBar.install()
+        let server = ClipServer(
+            hub: hub,
+            injector: injector,
+            pairing: pairing,
+            tokenStore: tokenStore,
+            hmacValidator: hmacValidator,
+            tlsConfiguration: tlsConfig
+        )
+        self.server = server
         startPipeline()
         startAdvertising()
     }
@@ -49,7 +70,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_ notification: Notification) {
         broadcastTask?.cancel()
         watcher.stop()
-        server.stop()
+        server?.stop()
         advertiser?.stop()
         menuBar.tearDown()
     }
@@ -63,11 +84,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         watcher.start()
-        server.start()
+        server?.start()
     }
 
     private func startAdvertising() {
-        let fp = PairingManager.fingerprint(of: pairingSecret)
+        let fp = tlsManager.spkiFingerprint.isEmpty
+            ? PairingManager.fingerprint(of: pairingSecret)
+            : tlsManager.spkiFingerprint
         let name = Self.deviceName()
         let txt: [String: String] = [
             "version": "0.1.0",
