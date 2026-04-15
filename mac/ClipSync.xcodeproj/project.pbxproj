@@ -27,6 +27,17 @@
 		A00000000000000000001502 /* PairingManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000001501 /* PairingManagerTests.swift */; };
 		A00000000000000000001602 /* KeychainTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000001601 /* KeychainTests.swift */; };
 		A00000000000000000001702 /* BonjourAdvertiserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000001701 /* BonjourAdvertiserTests.swift */; };
+		A00000000000000000001802 /* TLSManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000001801 /* TLSManager.swift */; };
+		A00000000000000000001902 /* HMACValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000001901 /* HMACValidator.swift */; };
+		A00000000000000000001A02 /* TokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000001A01 /* TokenStore.swift */; };
+		A00000000000000000001B02 /* AuthMiddleware.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000001B01 /* AuthMiddleware.swift */; };
+		A00000000000000000001C02 /* TLSManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000001C01 /* TLSManagerTests.swift */; };
+		A00000000000000000001D02 /* HMACValidatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000001D01 /* HMACValidatorTests.swift */; };
+		A00000000000000000001E02 /* TokenStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000001E01 /* TokenStoreTests.swift */; };
+		A00000000000000000001F02 /* AuthMiddlewareTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000001F01 /* AuthMiddlewareTests.swift */; };
+		A00000000000000000002003 /* HummingbirdTLS in Frameworks */ = {isa = PBXBuildFile; productRef = A00000000000000000002002 /* HummingbirdTLS */; };
+		A00000000000000000002103 /* NIOSSL in Frameworks */ = {isa = PBXBuildFile; productRef = A00000000000000000002102 /* NIOSSL */; };
+		A00000000000000000002203 /* X509 in Frameworks */ = {isa = PBXBuildFile; productRef = A00000000000000000002202 /* X509 */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -61,6 +72,14 @@
 		A00000000000000000001501 /* PairingManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingManagerTests.swift; sourceTree = "<group>"; };
 		A00000000000000000001601 /* KeychainTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainTests.swift; sourceTree = "<group>"; };
 		A00000000000000000001701 /* BonjourAdvertiserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BonjourAdvertiserTests.swift; sourceTree = "<group>"; };
+		A00000000000000000001801 /* TLSManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TLSManager.swift; sourceTree = "<group>"; };
+		A00000000000000000001901 /* HMACValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HMACValidator.swift; sourceTree = "<group>"; };
+		A00000000000000000001A01 /* TokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenStore.swift; sourceTree = "<group>"; };
+		A00000000000000000001B01 /* AuthMiddleware.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthMiddleware.swift; sourceTree = "<group>"; };
+		A00000000000000000001C01 /* TLSManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TLSManagerTests.swift; sourceTree = "<group>"; };
+		A00000000000000000001D01 /* HMACValidatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HMACValidatorTests.swift; sourceTree = "<group>"; };
+		A00000000000000000001E01 /* TokenStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenStoreTests.swift; sourceTree = "<group>"; };
+		A00000000000000000001F01 /* AuthMiddlewareTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthMiddlewareTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -70,6 +89,9 @@
 			files = (
 				A00000000000000000000303 /* Hummingbird in Frameworks */,
 				A00000000000000000000305 /* HummingbirdWebSocket in Frameworks */,
+				A00000000000000000002003 /* HummingbirdTLS in Frameworks */,
+				A00000000000000000002103 /* NIOSSL in Frameworks */,
+				A00000000000000000002203 /* X509 in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -99,6 +121,7 @@
 				A00000000000000000000500 /* Clipboard */,
 				A00000000000000000001000 /* Network */,
 				A00000000000000000001100 /* Pairing */,
+				A00000000000000000001800 /* Security */,
 				A000000000000000000000B3 /* Server */,
 				A00000000000000000001200 /* Storage */,
 				A00000000000000000001300 /* UI */,
@@ -106,6 +129,15 @@
 				A00000000000000000000102 /* Info.plist */,
 			);
 			path = ClipSync;
+			sourceTree = "<group>";
+		};
+		A00000000000000000001800 /* Security */ = {
+			isa = PBXGroup;
+			children = (
+				A00000000000000000001801 /* TLSManager.swift */,
+				A00000000000000000001901 /* HMACValidator.swift */,
+			);
+			path = Security;
 			sourceTree = "<group>";
 		};
 		A00000000000000000001000 /* Network */ = {
@@ -120,6 +152,7 @@
 			isa = PBXGroup;
 			children = (
 				A00000000000000000001101 /* PairingManager.swift */,
+				A00000000000000000001A01 /* TokenStore.swift */,
 			);
 			path = Pairing;
 			sourceTree = "<group>";
@@ -144,6 +177,7 @@
 		A000000000000000000000B3 /* Server */ = {
 			isa = PBXGroup;
 			children = (
+				A00000000000000000001B01 /* AuthMiddleware.swift */,
 				A00000000000000000000401 /* ClipServer.swift */,
 				A00000000000000000000403 /* ServerConfig.swift */,
 				A00000000000000000000405 /* WebSocketHub.swift */,
@@ -173,11 +207,15 @@
 		A00000000000000000000700 /* ClipSyncTests */ = {
 			isa = PBXGroup;
 			children = (
+				A00000000000000000001F01 /* AuthMiddlewareTests.swift */,
 				A00000000000000000001701 /* BonjourAdvertiserTests.swift */,
 				A00000000000000000000703 /* ClipPayloadTests.swift */,
+				A00000000000000000001D01 /* HMACValidatorTests.swift */,
 				A00000000000000000001601 /* KeychainTests.swift */,
 				A00000000000000000001501 /* PairingManagerTests.swift */,
 				A00000000000000000000701 /* PasteboardRoundtripTests.swift */,
+				A00000000000000000001C01 /* TLSManagerTests.swift */,
+				A00000000000000000001E01 /* TokenStoreTests.swift */,
 			);
 			path = ClipSyncTests;
 			sourceTree = "<group>";
@@ -201,6 +239,9 @@
 			packageProductDependencies = (
 				A00000000000000000000302 /* Hummingbird */,
 				A00000000000000000000304 /* HummingbirdWebSocket */,
+				A00000000000000000002002 /* HummingbirdTLS */,
+				A00000000000000000002102 /* NIOSSL */,
+				A00000000000000000002202 /* X509 */,
 			);
 			productName = ClipSync;
 			productReference = A000000000000000000000C1 /* ClipSync.app */;
@@ -255,6 +296,8 @@
 			packageReferences = (
 				A00000000000000000000301 /* XCRemoteSwiftPackageReference "hummingbird" */,
 				A00000000000000000000311 /* XCRemoteSwiftPackageReference "hummingbird-websocket" */,
+				A00000000000000000002001 /* XCRemoteSwiftPackageReference "swift-nio-ssl" */,
+				A00000000000000000002201 /* XCRemoteSwiftPackageReference "swift-certificates" */,
 			);
 			productRefGroup = A000000000000000000000B4 /* Products */;
 			projectDirPath = "";
@@ -290,9 +333,11 @@
 			buildActionMask = 2147483647;
 			files = (
 				A000000000000000000000F2 /* App.swift in Sources */,
+				A00000000000000000001B02 /* AuthMiddleware.swift in Sources */,
 				A00000000000000000001002 /* BonjourAdvertiser.swift in Sources */,
 				A00000000000000000000402 /* ClipServer.swift in Sources */,
 				A00000000000000000000502 /* ClipPayload.swift in Sources */,
+				A00000000000000000001902 /* HMACValidator.swift in Sources */,
 				A00000000000000000001202 /* Keychain.swift in Sources */,
 				A00000000000000000001302 /* MenuBarController.swift in Sources */,
 				A00000000000000000001102 /* PairingManager.swift in Sources */,
@@ -300,6 +345,8 @@
 				A00000000000000000000506 /* PasteboardInjector.swift in Sources */,
 				A00000000000000000000504 /* PasteboardWatcher.swift in Sources */,
 				A00000000000000000000404 /* ServerConfig.swift in Sources */,
+				A00000000000000000001802 /* TLSManager.swift in Sources */,
+				A00000000000000000001A02 /* TokenStore.swift in Sources */,
 				A00000000000000000000406 /* WebSocketHub.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -308,11 +355,15 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A00000000000000000001F02 /* AuthMiddlewareTests.swift in Sources */,
 				A00000000000000000001702 /* BonjourAdvertiserTests.swift in Sources */,
 				A00000000000000000000704 /* ClipPayloadTests.swift in Sources */,
+				A00000000000000000001D02 /* HMACValidatorTests.swift in Sources */,
 				A00000000000000000001602 /* KeychainTests.swift in Sources */,
 				A00000000000000000001502 /* PairingManagerTests.swift in Sources */,
 				A00000000000000000000702 /* PasteboardRoundtripTests.swift in Sources */,
+				A00000000000000000001C02 /* TLSManagerTests.swift in Sources */,
+				A00000000000000000001E02 /* TokenStoreTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -580,6 +631,22 @@
 				minimumVersion = 2.0.0;
 			};
 		};
+		A00000000000000000002001 /* XCRemoteSwiftPackageReference "swift-nio-ssl" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-nio-ssl.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.0.0;
+			};
+		};
+		A00000000000000000002201 /* XCRemoteSwiftPackageReference "swift-certificates" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/apple/swift-certificates.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -592,6 +659,21 @@
 			isa = XCSwiftPackageProductDependency;
 			package = A00000000000000000000311 /* XCRemoteSwiftPackageReference "hummingbird-websocket" */;
 			productName = HummingbirdWebSocket;
+		};
+		A00000000000000000002002 /* HummingbirdTLS */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A00000000000000000000301 /* XCRemoteSwiftPackageReference "hummingbird" */;
+			productName = HummingbirdTLS;
+		};
+		A00000000000000000002102 /* NIOSSL */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A00000000000000000002001 /* XCRemoteSwiftPackageReference "swift-nio-ssl" */;
+			productName = NIOSSL;
+		};
+		A00000000000000000002202 /* X509 */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A00000000000000000002201 /* XCRemoteSwiftPackageReference "swift-certificates" */;
+			productName = X509;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
