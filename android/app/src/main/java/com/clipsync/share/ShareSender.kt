@@ -1,6 +1,5 @@
 package com.clipsync.share
 
-import android.util.Base64
 import com.clipsync.crypto.HmacSigner
 import com.clipsync.model.ClipPayload
 import com.clipsync.net.ClipClient
@@ -8,6 +7,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.util.Base64
 import java.util.UUID
 
 /**
@@ -55,15 +55,14 @@ class ShareSender(
         return post(client, host, port, token, pairingSecretB64, payload)
     }
 
-    /** Exposed for tests — lets the test inject its own OkHttpClient. */
+    /** Exposed for tests — lets the test inject its own OkHttpClient and URL. */
     internal fun sendWithClient(
         client: OkHttpClient,
-        host: String,
-        port: Int,
+        url: String,
         token: String,
         pairingSecretB64: String,
         payload: ClipPayload
-    ): Result = post(client, host, port, token, pairingSecretB64, payload)
+    ): Result = post(client, url, token, pairingSecretB64, payload)
 
     private fun post(
         client: OkHttpClient,
@@ -72,9 +71,17 @@ class ShareSender(
         token: String,
         pairingSecretB64: String,
         payload: ClipPayload
+    ): Result = post(client, "https://$host:$port/inject", token, pairingSecretB64, payload)
+
+    private fun post(
+        client: OkHttpClient,
+        url: String,
+        token: String,
+        pairingSecretB64: String,
+        payload: ClipPayload
     ): Result {
         val secret = try {
-            Base64.decode(pairingSecretB64, Base64.DEFAULT)
+            Base64.getDecoder().decode(pairingSecretB64)
         } catch (t: Throwable) {
             return Result.Failed("invalid secret")
         }
@@ -82,7 +89,6 @@ class ShareSender(
         val ts = clockMs() / 1000L
         val sigHeader = HmacSigner.signatureHeader(secret, ts, body)
 
-        val url = "https://$host:$port/inject"
         val req = Request.Builder()
             .url(url)
             .header("Authorization", "Bearer $token")
@@ -102,7 +108,7 @@ class ShareSender(
     }
 
     fun buildTextPayload(text: String): ClipPayload {
-        val b64 = Base64.encodeToString(text.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
+        val b64 = Base64.getEncoder().encodeToString(text.toByteArray(Charsets.UTF_8))
         return ClipPayload(
             type = "text",
             mime = "text/plain",
@@ -113,7 +119,7 @@ class ShareSender(
     }
 
     fun buildImagePayload(mime: String, bytes: ByteArray): ClipPayload {
-        val b64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
+        val b64 = Base64.getEncoder().encodeToString(bytes)
         return ClipPayload(
             type = "image",
             mime = mime,
