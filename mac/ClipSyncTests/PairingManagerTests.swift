@@ -35,6 +35,9 @@ final class PairingManagerTests: XCTestCase {
         let response = try await manager.consume(code: session.code)
         XCTAssertFalse(response.token.isEmpty)
         XCTAssertFalse(response.sig.isEmpty)
+        XCTAssertFalse(response.secret.isEmpty)
+        XCTAssertEqual(Data(base64Encoded: response.secret), secret,
+                       "consume() should return the pairing-secret so Android can sign /inject")
 
         do {
             _ = try await manager.consume(code: session.code)
