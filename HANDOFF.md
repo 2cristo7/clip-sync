@@ -1,65 +1,67 @@
 # ClipSync Pipeline Handoff
 
 **Fecha**: 2026-04-15
-**Última fase completada**: 5 — Android Base Client (merge `e1b2d16`)
-**Siguiente fase**: 6 — Android: Notificaciones + Inyección en ClipboardManager
+**Última fase completada**: 7 — Android Share Target + Pairing-Secret Distribution (merge `9ba2ecb`)
+**Siguiente fase**: 8 — Integración Tailscale + Pruebas Remotas
 **Tests actuales**:
-- macOS (`xcodebuild test -project mac/ClipSync.xcodeproj -scheme ClipSync`): 33 passed, 0 failed.
-- Android (`cd android && ./gradlew :app:testDebugUnitTest :app:assembleDebug`): 11 unit tests passed, `BUILD SUCCESSFUL`.
-**Rama actual**: `main` (limpia, sin trabajo en curso).
+- macOS (`xcodebuild test -project mac/ClipSync.xcodeproj -scheme ClipSync`): 33 passed, 0 failed (primer run intermitente "test runner hung"; retry verde — flaky harness, no el código).
+- Android (`cd android && ./gradlew :app:testDebugUnitTest :app:assembleDebug :app:lintDebug`): 27 unit tests passed, BUILD SUCCESSFUL, lint clean.
+
+**Rama actual**: `main` (limpia).
 
 ## Estado de merges en `main` (first-parent)
 
 ```
-e1b2d16 Merge branch 'feature/android-client-core' into main   ← Phase 5
+9ba2ecb Merge branch 'feature/android-share-target' into main              ← Phase 7
+6150f8f docs[pipeline]: add phase 6 summary
+12968fc Merge branch 'feature/android-notifications-clipboard' into main   ← Phase 6
+6729f96 chore[pipeline]: add phase 5 summary and handoff
+e1b2d16 Merge branch 'feature/android-client-core' into main               ← Phase 5
 eaf5710 docs[pipeline]: add phase 4 summary
-85d957d Merge branch 'feature/mac-security' into main          ← Phase 4
+85d957d Merge branch 'feature/mac-security' into main                      ← Phase 4
 49e334e chore[pipeline]: document phased sub-agent delegation protocol
 a4eba91 docs[pipeline]: add master plan and phase 1-3 summaries
-f448eeb Merge branch 'feature/mac-discovery-pairing' into main ← Phase 3
-8243f01 Merge branch 'feature/mac-clipboard-core' into main    ← Phase 2
-fb0fd2f Merge branch 'feature/mac-server-core' into main       ← Phase 1
-efb69b3 Merge branch 'chore/bootstrap' into main               ← Phase 0
-102ba72 chore[init]: initialize repository and add git conventions
+f448eeb Merge branch 'feature/mac-discovery-pairing' into main             ← Phase 3
+8243f01 Merge branch 'feature/mac-clipboard-core' into main                ← Phase 2
+fb0fd2f Merge branch 'feature/mac-server-core' into main                   ← Phase 1
+efb69b3 Merge branch 'chore/bootstrap' into main                           ← Phase 0
 ```
 
 ## Notas en caliente para el próximo master
 
-### Decisión pendiente que afecta Fase 7 (CRÍTICA)
-**Distribución del `pairing-secret` al cliente Android para firmar HMAC en `POST /inject`.**
+### Decisión resuelta (cerrada en Fase 7)
+La distribución del `pairing-secret` se hace dentro del JSON de `/pair` (TLS). No hay endpoint separado. `PairingResponse = {token, sig, secret}`. Android lo persiste en `Prefs.pairingSecret` (EncryptedSharedPreferences). `HmacSigner` lo usa sin TODOs pendientes. Formato HMAC usado: header `X-ClipSync-Signature: t=<ts>, v1=<hex>` sobre `<ts>.<body>`.
 
-Estado actual:
-- `mac/ClipSync/Pairing/PairingManager.swift` genera `{token, sig}` donde `sig = HMAC-SHA256(token, pairing-secret)`. El secret NO sale del Mac.
-- El QR (`clipsync://pair?host=…&port=…&code=…`) NO incluye el secret.
-- Android tiene `crypto/HmacSigner.kt` listo y testeado, pero no tiene el secret para firmar.
+### Estado funcional end-to-end tras Fase 7
+- Mac → Pixel: implementado (Fase 5 WebSocket + Fase 6 notificaciones + trampolín ApplyClipActivity).
+- Pixel → Mac (Share Target): implementado (Fase 7 ShareReceiverActivity + ShareSender firmando HMAC).
+- Cubierto por tests unitarios (MockWebServer en Android, 33 tests en Mac). **Validación en device real pendiente** — sugerirlo tras Fase 8.
 
-Recomendación del sub-agente de Fase 5: **extender `/pair` para devolver un tercer campo `secret` (base64)** además de `token`+`sig`. La TLS preserva la confidencialidad. El sub-agente de Fase 7 debe decidir y, si toma esta opción, actualizar también el sub-agente de Fase 6 si necesita firmar algo (probablemente no — Fase 6 solo recibe).
-
-TODOs vivos en: `android/app/src/main/java/com/clipsync/crypto/HmacSigner.kt`, `android/app/src/main/java/com/clipsync/net/PairingApi.kt`.
-
-### Punto de extensión para Fase 6
-- `android/app/src/main/java/com/clipsync/service/ClipForegroundService.kt` → método `onFrame(payload)` actualmente solo hace `Log.i("ClipSync", …)`. Ahí se enchufa el `IncomingClipNotifier` + `ApplyClipActivity` trampoline descritos en Fase 6 del `master_plan.md`.
-- `model/ClipPayload.kt` ya tiene `fromJson/toJson` testeados — reutilizar.
-- `Fingerprint.okHttpPin` y la conversión TOFU funcionan; no tocar la capa de red salvo necesidad.
+### Puntos de extensión para Fase 8 (Tailscale)
+- `Prefs.pairingSecret`, `Prefs.token`, `Prefs.fp` existen. Tailscale añade sólo host/port distintos (MagicDNS o IP Tailscale). `SettingsViewModel.persistAndStart` debe seguir recibiendo el secret en cualquier re-pair.
+- Modo "Manual" en UI Compose (TOFU) ya permite introducir IP+puerto; probablemente suficiente para Tailscale sin cambios en UI.
+- mDNS sobre Tailscale NO suele funcionar (no hay multicast). Documéntalo: "Auto" en LAN, "Manual" en Tailscale.
+- TLS self-signed con cert pinning sobrevive a Tailscale sin cambios (pinning por SPKI fingerprint, no por hostname).
+- `master_plan.md` Fase 8 (líneas 470-513) tiene el spec; entregable principal es `docs/tailscale-setup.md`.
 
 ### Deuda y warnings (no bloqueantes)
-- Android `compileSdk = 35` con `targetSdk = 34`. AGP 8.5.2 advierte "tested up to 34"; build OK.
-- macOS: `HummingbirdTesting` no está en el target de tests por un fallo de link de `HummingbirdCore.framework` (NIOHTTP1 missing). Cobertura del middleware vía unit tests del extractor + `TokenStoreTests` + `HMACValidatorTests`. Reintentar cuando upstream lo arregle.
-- Menú "Clients → Revoke" en macOS no está cableado; `TokenStore.list/revoke` listos para conectarlo (polish, no crítico).
-- Bonjour TXT `fp` ya es SPKI-SHA256 base64url sin padding; cliente Android ya lo lee correctamente.
-- `Package.resolved` en `.gitignore` (recordar para futuras fases macOS).
-- pbxproj: `objectVersion 56`, IDs hex 24 chars libres desde `A00000000000000000001800` (revisar en pbxproj antes de añadir archivos para no chocar; los rangos usados en Fase 4 fueron consecutivos).
+- macOS: `HummingbirdTesting` sigue fuera del target de tests (link NIOHTTP1). Cobertura vía unit tests.
+- macOS: `xcodebuild test` a veces falla con "test runner hung before establishing connection" en el primer run — retry verde. Posible saturación del simulator/DerivedData; si ocurre, retry una vez antes de bloquear.
+- Android: AGP 8.5.2 warning "compileSdk 35 tested up to 34" — no bloquea.
+- Menú "Clients → Revoke" en macOS sin cablear (polish Fase 9).
+- `Package.resolved` en `.gitignore` (recordar).
+- pbxproj: `objectVersion 56`, IDs hex 24 chars — rangos libres continuando desde los consecutivos usados en Fase 4.
 
-### Sesión cerrada por protocolo de handoff
-- 2 fases completadas en esta sesión (4 y 5).
-- Fase 4 requirió 1 reintento del sub-agente (el primer Agent confundió su rol con el del master). Por eso el handoff dispara tras 2 fases en lugar de 3.
-- Tool calls usadas en esta sesión: ~35.
+### Contexto consumido por handoff
+- Sesión completó Fases 6 y 7 (2 fases).
+- Fase 7 sub-agente: 81 tool_uses y ~94k tokens (output grande). Por protocolo (b) — `>50 KB output` aproximado — handoff tras 2 fases.
+- Sin reintentos de sub-agente en esta sesión.
 
 ## Cómo continuar
 
-Abre un chat nuevo de Claude Code en esta misma carpeta (`/Users/2cristo7/Documents/personal-proyects/shared-clipboard`) y pega el prompt de arranque original. El nuevo master leerá este `HANDOFF.md`, verificará que `git log --oneline --first-parent main` coincide, y retomará en Fase 6.
+Abre un chat nuevo de Claude Code en `/Users/2cristo7/Documents/personal-proyects/shared-clipboard` y pega el prompt de arranque original. El nuevo master leerá este `HANDOFF.md`, verificará `git log --oneline --first-parent main` y retomará en Fase 8.
 
-**Tip al próximo master**: cuando lances el `Agent` para Fase 6 (y sucesivas), incluye este bloque al inicio del prompt para evitar el problema de Fase 4:
+**Tip al próximo master**: Fase 8 (Tailscale) es principalmente validación manual + documentación (`docs/tailscale-setup.md`). Respeta la regla "el master no implementa código" y delega aunque el sub-agente sea pequeño. Usa este bloque al inicio del prompt del sub-agente:
 
 > ## Tu rol (léelo primero)
-> Eres un sub-agente implementador. Implementas directamente. NO eres el master. NO delegues, NO lances otros Agent, NO mergees a main, NO hagas push. La regla "el master no implementa código" del claude.md se aplica al master, no a ti.
+> Eres un sub-agente implementador. Implementas directamente. NO eres el master. NO delegues, NO lances otros Agent, NO mergees a main, NO hagas push.
