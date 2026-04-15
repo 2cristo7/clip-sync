@@ -16,8 +16,10 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.clipsync.app.R
+import com.clipsync.images.ImageCache
 import com.clipsync.model.ClipPayload
 import com.clipsync.net.ClipClient
+import com.clipsync.notifications.IncomingClipNotifier
 import com.clipsync.storage.Prefs
 import okhttp3.WebSocket
 import kotlin.math.min
@@ -36,6 +38,8 @@ class ClipForegroundService : Service() {
 
     private lateinit var prefs: Prefs
     private lateinit var client: ClipClient
+    private lateinit var imageCache: ImageCache
+    private lateinit var incomingNotifier: IncomingClipNotifier
     private var ws: WebSocket? = null
     private var backoffMs: Long = INITIAL_BACKOFF_MS
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
@@ -49,7 +53,16 @@ class ClipForegroundService : Service() {
         super.onCreate()
         prefs = Prefs(this)
         client = ClipClient()
+        imageCache = ImageCache(this)
+        incomingNotifier = IncomingClipNotifier(this, imageCache)
         ensureNotificationChannel()
+        incomingNotifier.ensureChannel()
+        try {
+            val pruned = imageCache.cleanupOlderThan()
+            if (pruned > 0) Log.i(TAG, "Pruned $pruned stale cached image(s)")
+        } catch (t: Throwable) {
+            Log.w(TAG, "ImageCache cleanup failed: ${t.message}")
+        }
         startForeground(NOTIF_ID, buildNotification("Connecting..."))
         registerNetworkCallback()
     }
@@ -100,8 +113,12 @@ class ClipForegroundService : Service() {
     }
 
     private fun onFrame(payload: ClipPayload) {
-        // Phase 5 scope: just log. Clipboard injection lands in Phase 6.
         Log.i(TAG, "frame type=${payload.type} mime=${payload.mime} bytes=${payload.data.length} ts=${payload.ts}")
+        try {
+            incomingNotifier.notify(payload)
+        } catch (t: Throwable) {
+            Log.w(TAG, "notify failed: ${t.message}")
+        }
     }
 
     private fun scheduleReconnect() {
