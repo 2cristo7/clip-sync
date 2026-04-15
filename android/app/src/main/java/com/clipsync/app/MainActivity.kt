@@ -1,0 +1,32 @@
+package com.clipsync.app
+
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.ui.Modifier
+import com.clipsync.service.ClipForegroundService
+import com.clipsync.storage.Prefs
+import com.clipsync.ui.SettingsScreen
+
+class MainActivity : ComponentActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        // If we already paired, spin up the foreground service on launch.
+        val prefs = Prefs(applicationContext)
+        if (prefs.hasPairing()) {
+            ClipForegroundService.start(applicationContext)
+        }
+
+        setContent {
+            MaterialTheme {
+                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                    SettingsScreen()
+                }
+            }
+        }
+    }
+}
