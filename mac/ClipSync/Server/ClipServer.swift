@@ -1,7 +1,10 @@
 import Foundation
 import HTTPTypes
 import Hummingbird
+import HummingbirdCore
 import HummingbirdWebSocket
+import HummingbirdTLS
+import NIOSSL
 import Logging
 
 extension PairingResponse: ResponseEncodable {}
@@ -12,12 +15,18 @@ final class ClipServer {
     private let hub: WebSocketHub
     private let injector: PasteboardInjector
     private let pairing: PairingManager
+    private let tokenStore: TokenStore
+    private let hmacValidator: HMACValidator
+    private let tlsConfiguration: TLSConfiguration?
     private var runTask: Task<Void, Never>?
 
     init(config: ServerConfig = .default,
          hub: WebSocketHub,
          injector: PasteboardInjector,
-         pairing: PairingManager) {
+         pairing: PairingManager,
+         tokenStore: TokenStore,
+         hmacValidator: HMACValidator,
+         tlsConfiguration: TLSConfiguration? = nil) {
         self.config = config
         var logger = Logger(label: "clipsync.server")
         logger.logLevel = config.logLevel
@@ -25,6 +34,9 @@ final class ClipServer {
         self.hub = hub
         self.injector = injector
         self.pairing = pairing
+        self.tokenStore = tokenStore
+        self.hmacValidator = hmacValidator
+        self.tlsConfiguration = tlsConfiguration
     }
 
     func start() {
@@ -34,6 +46,9 @@ final class ClipServer {
         let hub = self.hub
         let injector = self.injector
         let pairing = self.pairing
+        let tokenStore = self.tokenStore
+        let hmacValidator = self.hmacValidator
+        let tlsConfiguration = self.tlsConfiguration
 
         runTask = Task.detached(priority: .userInitiated) {
             do {
@@ -41,31 +56,51 @@ final class ClipServer {
                     hub: hub,
                     injector: injector,
                     pairing: pairing,
+                    tokenStore: tokenStore,
+                    hmacValidator: hmacValidator,
                     logger: logger
                 )
+
+                let wsBuilder = HTTPServerBuilder.http1WebSocketUpgrade { request, _, logger in
+                    guard request.path == "/ws" else { return .dontUpgrade }
+                    // Enforce Bearer auth on the WS upgrade handshake.
+                    let authHeader = request.headerFields[HTTPField.Name("Authorization")!]
+                    guard let token = AuthMiddleware<BasicRequestContext>.extractBearer(authHeader),
+                          (try? await tokenStore.validate(tokenPlain: token)) != nil else {
+                        logger.info("WS upgrade rejected: missing or invalid bearer")
+                        return .dontUpgrade
+                    }
+                    return .upgrade([:]) { inbound, outbound, _ in
+                        let client = WebSocketHub.Client(outbound: outbound)
+                        await hub.register(client)
+                        do {
+                            for try await _ in inbound { }
+                        } catch {
+                            logger.debug("WebSocket ended: \(error)")
+                        }
+                        await hub.unregister(client)
+                    }
+                }
+
+                let serverBuilder: HTTPServerBuilder
+                if let tlsConfiguration {
+                    serverBuilder = try .tls(wsBuilder, tlsConfiguration: tlsConfiguration)
+                } else {
+                    serverBuilder = wsBuilder
+                }
+
                 let app = Application(
                     router: router,
-                    server: .http1WebSocketUpgrade { request, _, logger in
-                        guard request.path == "/ws" else { return .dontUpgrade }
-                        return .upgrade([:]) { inbound, outbound, _ in
-                            let client = WebSocketHub.Client(outbound: outbound)
-                            await hub.register(client)
-                            // autoPing in WebSocketServerConfiguration (30s default) supplies the heartbeats.
-                            do {
-                                for try await _ in inbound { }
-                            } catch {
-                                logger.debug("WebSocket ended: \(error)")
-                            }
-                            await hub.unregister(client)
-                        }
-                    },
+                    server: serverBuilder,
                     configuration: .init(
                         address: .hostname(config.host, port: config.port),
                         serverName: "ClipSync"
                     ),
                     logger: logger
                 )
-                logger.info("ClipSync server starting on \(config.host):\(config.port)")
+                logger.info("ClipSync server starting on \(config.host):\(config.port)", metadata: [
+                    "tls": .stringConvertible(tlsConfiguration != nil),
+                ])
                 try await app.runService()
             } catch {
                 Self.logStartupError(error, config: config, logger: logger)
@@ -81,11 +116,17 @@ final class ClipServer {
     private static let version = "0.1.0"
     private static let platform = "macos"
 
-    private static func makeRouter(hub: WebSocketHub,
-                                   injector: PasteboardInjector,
-                                   pairing: PairingManager,
-                                   logger: Logger) -> Router<BasicRequestContext> {
+    static func makeRouter(hub: WebSocketHub,
+                           injector: PasteboardInjector,
+                           pairing: PairingManager,
+                           tokenStore: TokenStore,
+                           hmacValidator: HMACValidator,
+                           logger: Logger) -> Router<BasicRequestContext> {
         let router = Router()
+        router.add(middleware: AuthMiddleware<BasicRequestContext>(
+            tokenStore: tokenStore,
+            hmacValidator: hmacValidator
+        ))
         router.get("/health") { _, _ -> HealthResponse in
             HealthResponse(ok: true, version: version, platform: platform)
         }
@@ -112,7 +153,12 @@ final class ClipServer {
             }
             let code = String(raw)
             do {
-                return try await pairing.consume(code: code)
+                let response = try await pairing.consume(code: code)
+                // Register the issued token in TokenStore so subsequent requests
+                // can authenticate with `Authorization: Bearer <token>`.
+                let deviceLabel = request.headers[HTTPField.Name("X-ClipSync-Device")!] ?? "paired-device"
+                _ = try await tokenStore.register(tokenPlain: response.token, deviceLabel: deviceLabel)
+                return response
             } catch let error as PairingError {
                 context.logger.info("pair rejected", metadata: [
                     "reason": .string(String(describing: error)),
@@ -123,13 +169,13 @@ final class ClipServer {
         return router
     }
 
-    private struct HealthResponse: ResponseEncodable, Sendable {
+    struct HealthResponse: ResponseEncodable, Sendable {
         let ok: Bool
         let version: String
         let platform: String
     }
 
-    private struct InjectResponse: ResponseEncodable, Sendable {
+    struct InjectResponse: ResponseEncodable, Sendable {
         let ok: Bool
         let nonce: String
     }
