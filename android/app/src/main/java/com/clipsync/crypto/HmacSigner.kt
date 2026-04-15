@@ -11,8 +11,10 @@ import javax.crypto.spec.SecretKeySpec
  *   header value = "t=<unix_ts>, v1=<hex>"
  *   v1 = HMAC-SHA256(pairing-secret, "<ts>.<body>") hex-encoded (lowercase)
  *
- * The `pairing-secret` is NOT available to the Android client in Phase 5 —
- * this helper is kept here so Phase 7 (`POST /inject`) can reuse it directly.
+ * The `pairing-secret` is delivered via the `secret` field of the `/pair`
+ * response (Phase 7) and persisted in EncryptedSharedPreferences
+ * (`Prefs.pairingSecret`, base64). Callers decode it and pass the raw bytes
+ * to [signatureHeader].
  */
 object HmacSigner {
 
