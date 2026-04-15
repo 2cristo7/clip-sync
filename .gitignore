@@ -36,6 +36,10 @@ local.properties
 *.jks
 .externalNativeBuild/
 .cxx/
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
 
 # ---------- JetBrains IDEs ----------
 .idea/
