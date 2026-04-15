@@ -13,6 +13,10 @@ enum PairingError: Error, Equatable {
 struct PairingResponse: Codable, Sendable {
     let token: String
     let sig: String
+    /// Base64-encoded pairing-secret shared with the client so it can sign
+    /// `POST /inject` requests with the same HMAC key the server validates.
+    /// Confidentiality is preserved by TLS (self-signed cert pinned via SPKI).
+    let secret: String
 }
 
 struct PairingSession: Sendable {
@@ -88,7 +92,8 @@ actor PairingManager {
         logger.info("Pairing code consumed")
         return PairingResponse(
             token: tokenBytes.base64EncodedString(),
-            sig: Data(signature).base64EncodedString()
+            sig: Data(signature).base64EncodedString(),
+            secret: secret.base64EncodedString()
         )
     }
 

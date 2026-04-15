@@ -43,10 +43,19 @@ class Prefs(context: Context) {
         get() = prefs.getString(K_MODE, MODE_AUTO) ?: MODE_AUTO
         set(v) { prefs.edit().putString(K_MODE, v).apply() }
 
+    /**
+     * Base64-encoded pairing-secret shared by the Mac during `/pair`. Used to
+     * HMAC-sign `POST /inject` requests from the share target (Phase 7).
+     */
+    var pairingSecret: String?
+        get() = prefs.getString(K_SECRET, null)
+        set(v) { prefs.edit().putString(K_SECRET, v).apply() }
+
     fun clearPairing() {
         prefs.edit()
             .remove(K_TOKEN)
             .remove(K_FP)
+            .remove(K_SECRET)
             .apply()
     }
 
@@ -59,6 +68,7 @@ class Prefs(context: Context) {
         private const val K_HOST = "host"
         private const val K_PORT = "port"
         private const val K_MODE = "mode"
+        private const val K_SECRET = "pairing_secret"
         const val MODE_AUTO = "auto"
         const val MODE_MANUAL = "manual"
     }

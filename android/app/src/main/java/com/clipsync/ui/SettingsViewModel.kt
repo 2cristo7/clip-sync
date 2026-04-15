@@ -83,19 +83,19 @@ class SettingsViewModel : ViewModel() {
                             val resp = withContext(Dispatchers.IO) {
                                 api.pairWithTofu(d.host, d.port, code)
                             }
-                            persistAndStart(context, prefs, d.host, d.port, resp.token, resp.fpBase64Url, Prefs.MODE_AUTO)
+                            persistAndStart(context, prefs, d.host, d.port, resp.token, resp.fpBase64Url, resp.secret, Prefs.MODE_AUTO)
                         } else {
                             val resp = withContext(Dispatchers.IO) {
                                 api.pairWithKnownFp(d.host, d.port, code, fp)
                             }
-                            persistAndStart(context, prefs, d.host, d.port, resp.token, fp, Prefs.MODE_AUTO)
+                            persistAndStart(context, prefs, d.host, d.port, resp.token, fp, resp.secret, Prefs.MODE_AUTO)
                         }
                     }
                     is PairingTarget.Manual -> {
                         val resp = withContext(Dispatchers.IO) {
                             api.pairWithTofu(target.host, target.port, code)
                         }
-                        persistAndStart(context, prefs, target.host, target.port, resp.token, resp.fpBase64Url, Prefs.MODE_MANUAL)
+                        persistAndStart(context, prefs, target.host, target.port, resp.token, resp.fpBase64Url, resp.secret, Prefs.MODE_MANUAL)
                     }
                 }
             } catch (t: Throwable) {
@@ -115,12 +115,14 @@ class SettingsViewModel : ViewModel() {
         port: Int,
         token: String,
         fp: String,
+        pairingSecret: String,
         mode: String
     ) {
         prefs.host = host
         prefs.port = port
         prefs.token = token
         prefs.fp = fp
+        prefs.pairingSecret = pairingSecret
         prefs.mode = mode
         _state.value = _state.value.copy(status = ConnectionStatus.Connected(host), error = null)
         ClipForegroundService.start(context)

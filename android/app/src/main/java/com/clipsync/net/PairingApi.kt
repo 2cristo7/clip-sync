@@ -25,12 +25,15 @@ class PairingApi(
 
     data class PairingResponse(
         val token: String,
-        val sig: String
+        val sig: String,
+        /** Base64-encoded pairing-secret used to HMAC-sign `POST /inject`. */
+        val secret: String
     )
 
     data class TofuPairingResponse(
         val token: String,
         val sig: String,
+        val secret: String,
         val fpBase64Url: String
     )
 
@@ -44,7 +47,7 @@ class PairingApi(
         val resp = requestPair(client, host, port, code)
         val fp = fpHolder.fpBase64Url
             ?: throw IllegalStateException("TOFU client did not capture server cert fingerprint")
-        return TofuPairingResponse(resp.token, resp.sig, fp)
+        return TofuPairingResponse(resp.token, resp.sig, resp.secret, fp)
     }
 
     private fun requestPair(client: OkHttpClient, host: String, port: Int, code: String): PairingResponse {
@@ -61,10 +64,11 @@ class PairingApi(
             val json = JSONObject(body)
             val token = json.optString("token", "")
             val sig = json.optString("sig", "")
-            if (token.isEmpty() || sig.isEmpty()) {
+            val secret = json.optString("secret", "")
+            if (token.isEmpty() || sig.isEmpty() || secret.isEmpty()) {
                 throw PairingException("Malformed /pair response: $body")
             }
-            return PairingResponse(token, sig)
+            return PairingResponse(token, sig, secret)
         }
     }
 
