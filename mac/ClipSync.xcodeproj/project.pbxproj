@@ -38,6 +38,8 @@
 		A00000000000000000002003 /* HummingbirdTLS in Frameworks */ = {isa = PBXBuildFile; productRef = A00000000000000000002002 /* HummingbirdTLS */; };
 		A00000000000000000002103 /* NIOSSL in Frameworks */ = {isa = PBXBuildFile; productRef = A00000000000000000002102 /* NIOSSL */; };
 		A00000000000000000002203 /* X509 in Frameworks */ = {isa = PBXBuildFile; productRef = A00000000000000000002202 /* X509 */; };
+		A00000000000000000002302 /* ReachabilityMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000002301 /* ReachabilityMonitor.swift */; };
+		A00000000000000000002402 /* ReachabilityMonitorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000002401 /* ReachabilityMonitorTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -80,6 +82,8 @@
 		A00000000000000000001D01 /* HMACValidatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HMACValidatorTests.swift; sourceTree = "<group>"; };
 		A00000000000000000001E01 /* TokenStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenStoreTests.swift; sourceTree = "<group>"; };
 		A00000000000000000001F01 /* AuthMiddlewareTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthMiddlewareTests.swift; sourceTree = "<group>"; };
+		A00000000000000000002301 /* ReachabilityMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReachabilityMonitor.swift; sourceTree = "<group>"; };
+		A00000000000000000002401 /* ReachabilityMonitorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReachabilityMonitorTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -144,6 +148,7 @@
 			isa = PBXGroup;
 			children = (
 				A00000000000000000001001 /* BonjourAdvertiser.swift */,
+				A00000000000000000002301 /* ReachabilityMonitor.swift */,
 			);
 			path = Network;
 			sourceTree = "<group>";
@@ -214,6 +219,7 @@
 				A00000000000000000001601 /* KeychainTests.swift */,
 				A00000000000000000001501 /* PairingManagerTests.swift */,
 				A00000000000000000000701 /* PasteboardRoundtripTests.swift */,
+				A00000000000000000002401 /* ReachabilityMonitorTests.swift */,
 				A00000000000000000001C01 /* TLSManagerTests.swift */,
 				A00000000000000000001E01 /* TokenStoreTests.swift */,
 			);
@@ -344,6 +350,7 @@
 				A00000000000000000001402 /* PairingWindow.swift in Sources */,
 				A00000000000000000000506 /* PasteboardInjector.swift in Sources */,
 				A00000000000000000000504 /* PasteboardWatcher.swift in Sources */,
+				A00000000000000000002302 /* ReachabilityMonitor.swift in Sources */,
 				A00000000000000000000404 /* ServerConfig.swift in Sources */,
 				A00000000000000000001802 /* TLSManager.swift in Sources */,
 				A00000000000000000001A02 /* TokenStore.swift in Sources */,
@@ -362,6 +369,7 @@
 				A00000000000000000001602 /* KeychainTests.swift in Sources */,
 				A00000000000000000001502 /* PairingManagerTests.swift in Sources */,
 				A00000000000000000000702 /* PasteboardRoundtripTests.swift in Sources */,
+				A00000000000000000002402 /* ReachabilityMonitorTests.swift in Sources */,
 				A00000000000000000001C02 /* TLSManagerTests.swift in Sources */,
 				A00000000000000000001E02 /* TokenStoreTests.swift in Sources */,
 			);
