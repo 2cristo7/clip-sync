@@ -4,13 +4,9 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
-import android.net.ConnectivityManager
-import android.net.Network
-import android.net.NetworkRequest
+import com.clipsync.net.NetworkChangeObserver
 import android.os.Build
 import android.os.IBinder
 import android.util.Log
@@ -45,7 +41,7 @@ class ClipForegroundService : Service() {
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
     private val reconnectRunnable = Runnable { connect() }
 
-    private var networkCallback: ConnectivityManager.NetworkCallback? = null
+    private var networkObserver: NetworkChangeObserver? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -64,7 +60,12 @@ class ClipForegroundService : Service() {
             Log.w(TAG, "ImageCache cleanup failed: ${t.message}")
         }
         startForeground(NOTIF_ID, buildNotification("Connecting..."))
-        registerNetworkCallback()
+        networkObserver = NetworkChangeObserver(this) {
+            backoffMs = INITIAL_BACKOFF_MS
+            handler.removeCallbacks(reconnectRunnable)
+            handler.post(reconnectRunnable)
+        }
+        networkObserver?.register()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -78,7 +79,8 @@ class ClipForegroundService : Service() {
     }
 
     override fun onDestroy() {
-        unregisterNetworkCallback()
+        networkObserver?.unregister()
+        networkObserver = null
         handler.removeCallbacks(reconnectRunnable)
         ws?.cancel()
         ws = null
@@ -127,32 +129,6 @@ class ClipForegroundService : Service() {
         backoffMs = min(backoffMs * 2, MAX_BACKOFF_MS)
         Log.i(TAG, "Reconnect in ${delay}ms")
         handler.postDelayed(reconnectRunnable, delay)
-    }
-
-    private fun registerNetworkCallback() {
-        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val req = NetworkRequest.Builder().build()
-        val cb = object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: Network) {
-                Log.i(TAG, "Network available, reconnecting")
-                backoffMs = INITIAL_BACKOFF_MS
-                handler.removeCallbacks(reconnectRunnable)
-                handler.post(reconnectRunnable)
-            }
-            override fun onLost(network: Network) {
-                Log.i(TAG, "Network lost")
-            }
-        }
-        cm.registerNetworkCallback(req, cb)
-        networkCallback = cb
-    }
-
-    private fun unregisterNetworkCallback() {
-        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        networkCallback?.let {
-            try { cm.unregisterNetworkCallback(it) } catch (_: Throwable) {}
-        }
-        networkCallback = null
     }
 
     private fun ensureNotificationChannel() {
