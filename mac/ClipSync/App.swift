@@ -33,6 +33,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         onQuit: { NSApp.terminate(nil) }
     )
     private var advertiser: BonjourAdvertiser?
+    private var reachabilityMonitor: ReachabilityMonitor?
     private let pairingWindow = PairingWindowController()
     private var broadcastTask: Task<Void, Never>?
     private var logger = Logger(label: "clipsync.app")
@@ -71,6 +72,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         broadcastTask?.cancel()
         watcher.stop()
         server?.stop()
+        reachabilityMonitor?.stop()
         advertiser?.stop()
         menuBar.tearDown()
     }
@@ -104,6 +106,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         advertiser.start()
         self.advertiser = advertiser
+
+        let reachability = ReachabilityMonitor(advertiser: advertiser)
+        reachability.start()
+        self.reachabilityMonitor = reachability
     }
 
     private static func deviceName() -> String {
