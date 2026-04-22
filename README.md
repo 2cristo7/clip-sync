@@ -11,8 +11,8 @@ content to the Mac via Android's native Share sheet.
 ## Features
 
 - Real-time clipboard sync (text and images) over WebSocket.
-- Android Share Target -- send any text or image to your Mac from the system
-  share menu.
+- Clipboard overlay FAB -- copy anything on Android and tap the floating
+  button to send it to your Mac instantly.
 - Rich notifications on Android with one-tap copy to clipboard.
 - TOFU pairing with a one-time six-digit code; all subsequent requests are
   authenticated with Bearer tokens.
@@ -103,9 +103,9 @@ Mac (Server)                          Android (Client)
 
 | Method | Path      | Description                        |
 |--------|-----------|------------------------------------|
-| GET    | `/clip`   | Retrieve current Mac clipboard     |
+| GET    | `/health` | Server health check                |
 | POST   | `/inject` | Push content to Mac clipboard      |
-| POST   | `/pair`   | Exchange pairing code for token    |
+| GET    | `/pair`   | Exchange pairing code for token    |
 | WS     | `/ws`     | Real-time clipboard change stream  |
 
 All requests require a valid Bearer token (obtained during pairing) and an
