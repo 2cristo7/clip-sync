@@ -28,6 +28,7 @@ data class SettingsState(
     val mode: String = Prefs.MODE_AUTO,
     val discovered: List<Discovered> = emptyList(),
     val status: ConnectionStatus = ConnectionStatus.Disconnected,
+    val overlayEnabled: Boolean = true,
     val error: String? = null
 )
 
@@ -42,6 +43,7 @@ class SettingsViewModel : ViewModel() {
         val prefs = Prefs(context)
         _state.value = _state.value.copy(
             mode = prefs.mode,
+            overlayEnabled = prefs.overlayEnabled,
             status = if (prefs.hasPairing()) ConnectionStatus.Connected(prefs.host ?: "")
                      else ConnectionStatus.Disconnected
         )
@@ -50,6 +52,12 @@ class SettingsViewModel : ViewModel() {
 
     fun setMode(mode: String) {
         _state.value = _state.value.copy(mode = mode)
+    }
+
+    fun setOverlayEnabled(context: Context, enabled: Boolean) {
+        val prefs = Prefs(context)
+        prefs.overlayEnabled = enabled
+        _state.value = _state.value.copy(overlayEnabled = enabled)
     }
 
     fun startDiscovery(context: Context) {
