@@ -42,7 +42,6 @@ class ClipOverlayManager(private val context: Context) {
     private var fabView: View? = null
     private val wm = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private val handler = Handler(Looper.getMainLooper())
-    private val autoDismissRunnable = Runnable { dismiss() }
 
     private val resultReceiver = object : BroadcastReceiver() {
         override fun onReceive(ctx: Context?, intent: Intent?) {
@@ -50,7 +49,7 @@ class ClipOverlayManager(private val context: Context) {
             if (success) {
                 showSuccessFeedback()
             } else {
-                dismiss()
+                showErrorFeedback()
             }
         }
     }
@@ -59,12 +58,7 @@ class ClipOverlayManager(private val context: Context) {
 
     fun showFab() {
         // Must be called on the main thread.
-        if (fabView != null) {
-            // Already visible — reset the auto-dismiss timer.
-            handler.removeCallbacks(autoDismissRunnable)
-            handler.postDelayed(autoDismissRunnable, AUTO_DISMISS_MS)
-            return
-        }
+        if (fabView != null) return
 
         if (!Settings.canDrawOverlays(context)) {
             Log.d(TAG, "SYSTEM_ALERT_WINDOW not granted — skipping overlay")
@@ -87,7 +81,12 @@ class ClipOverlayManager(private val context: Context) {
 
         val view = buildFabView(size)
         view.setOnClickListener {
-            handler.removeCallbacks(autoDismissRunnable)
+            // Give visual feedback of tap
+            view.alpha = 1.0f
+            view.scaleX = 0.9f
+            view.scaleY = 0.9f
+            view.animate().scaleX(1f).scaleY(1f).setDuration(100).start()
+            
             launchSendClipActivity()
         }
 
@@ -110,25 +109,21 @@ class ClipOverlayManager(private val context: Context) {
             receiverRegistered = true
         }
 
-        // Entrance animation: fade + overshoot scale
+        // Entrance animation: fade to semi-transparent + overshoot scale
         view.alpha = 0f
         view.scaleX = 0.4f
         view.scaleY = 0.4f
         view.animate()
-            .alpha(1f)
+            .alpha(0.6f) // Idle state is semi-transparent so it's less intrusive
             .scaleX(1f)
             .scaleY(1f)
             .setDuration(200)
             .setInterpolator(OvershootInterpolator(2.0f))
             .start()
-
-        handler.removeCallbacks(autoDismissRunnable)
-        handler.postDelayed(autoDismissRunnable, AUTO_DISMISS_MS)
     }
 
     fun dismiss() {
         val view = fabView ?: return
-        handler.removeCallbacks(autoDismissRunnable)
         view.animate()
             .alpha(0f)
             .scaleX(0.4f)
@@ -153,13 +148,26 @@ class ClipOverlayManager(private val context: Context) {
 
     private fun showSuccessFeedback() {
         val view = fabView ?: return
-        // Brief flash to green, then dismiss
         val icon = view.findViewWithTag<ImageView>("icon")
-        icon?.setImageResource(R.drawable.ic_notification) // reuse existing; will improve in Phase 4
         icon?.setColorFilter(Color.parseColor("#4CAF50"))
+        view.alpha = 1.0f
 
-        handler.removeCallbacks(autoDismissRunnable)
-        handler.postDelayed({ dismiss() }, 600)
+        handler.postDelayed({ 
+            icon?.setColorFilter(Color.WHITE)
+            view.animate().alpha(0.6f).setDuration(300).start()
+        }, 1000)
+    }
+
+    private fun showErrorFeedback() {
+        val view = fabView ?: return
+        val icon = view.findViewWithTag<ImageView>("icon")
+        icon?.setColorFilter(Color.parseColor("#F44336"))
+        view.alpha = 1.0f
+
+        handler.postDelayed({ 
+            icon?.setColorFilter(Color.WHITE)
+            view.animate().alpha(0.6f).setDuration(300).start()
+        }, 1000)
     }
 
     private fun launchSendClipActivity() {
@@ -252,6 +260,5 @@ class ClipOverlayManager(private val context: Context) {
 
     companion object {
         private const val TAG = "ClipSync/Overlay"
-        private const val AUTO_DISMISS_MS = 4000L
     }
 }

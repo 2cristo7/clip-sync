@@ -87,21 +87,36 @@ fun SettingsScreen(vm: SettingsViewModel = viewModel()) {
 
             // Status card
             NeuCard {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    StatusDot(state.status)
-                    Spacer(Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            statusTitle(state.status),
-                            style = MaterialTheme.typography.titleMedium,
-                        )
-                        Text(
-                            statusSubtitle(state.status),
-                            style = MaterialTheme.typography.bodySmall,
-                        )
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        StatusDot(state.status)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                statusTitle(state.status),
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                            Text(
+                                statusSubtitle(state.status),
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    }
+
+                    if (state.status !is ConnectionStatus.Disconnected) {
+                        val isPaused = state.status is ConnectionStatus.Paused
+                        NeuButton(
+                            onClick = { vm.setSyncEnabled(context, isPaused) },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                if (isPaused) "Resume Sync" else "Pause Sync",
+                                color = if (isPaused) NeuColors.Accent else NeuColors.TextSecondary
+                            )
+                        }
                     }
                 }
             }
@@ -264,6 +279,7 @@ private fun StatusDot(status: ConnectionStatus) {
         ConnectionStatus.Disconnected -> NeuColors.Disconnected
         ConnectionStatus.Connecting -> NeuColors.Accent.copy(alpha = 0.6f)
         is ConnectionStatus.Connected -> NeuColors.Connected
+        is ConnectionStatus.Paused -> NeuColors.TextSecondary.copy(alpha = 0.5f)
         is ConnectionStatus.Error -> NeuColors.Error
     }
     Box(
@@ -278,6 +294,7 @@ private fun statusTitle(status: ConnectionStatus): String = when (status) {
     ConnectionStatus.Disconnected -> "Disconnected"
     ConnectionStatus.Connecting -> "Connecting…"
     is ConnectionStatus.Connected -> "Connected"
+    is ConnectionStatus.Paused -> "Paused"
     is ConnectionStatus.Error -> "Error"
 }
 
@@ -285,6 +302,7 @@ private fun statusSubtitle(status: ConnectionStatus): String = when (status) {
     ConnectionStatus.Disconnected -> "Pair with a Mac to start syncing"
     ConnectionStatus.Connecting -> "Establishing connection…"
     is ConnectionStatus.Connected -> status.host
+    is ConnectionStatus.Paused -> status.host
     is ConnectionStatus.Error -> status.reason
 }
 

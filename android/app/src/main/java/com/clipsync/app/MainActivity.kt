@@ -16,9 +16,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // If we already paired, spin up the foreground service on launch.
+        // If we already paired and sync is enabled, spin up the foreground service on launch.
         val prefs = Prefs(applicationContext)
-        if (prefs.hasPairing()) {
+        if (prefs.hasPairing() && prefs.syncEnabled) {
             ClipForegroundService.start(applicationContext)
         }
 
