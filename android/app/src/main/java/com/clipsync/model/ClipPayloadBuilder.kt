@@ -1,6 +1,6 @@
 package com.clipsync.model
 
-import java.util.Base64
+import android.util.Base64
 import java.util.UUID
 
 /**
@@ -12,7 +12,7 @@ import java.util.UUID
 object ClipPayloadBuilder {
 
     fun text(text: String, clockMs: Long = System.currentTimeMillis()): ClipPayload {
-        val b64 = Base64.getEncoder().encodeToString(text.toByteArray(Charsets.UTF_8))
+        val b64 = Base64.encodeToString(text.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
         return ClipPayload(
             type = "text",
             mime = "text/plain",
@@ -23,7 +23,7 @@ object ClipPayloadBuilder {
     }
 
     fun image(mime: String, bytes: ByteArray, clockMs: Long = System.currentTimeMillis()): ClipPayload {
-        val b64 = Base64.getEncoder().encodeToString(bytes)
+        val b64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
         return ClipPayload(
             type = "image",
             mime = mime,
