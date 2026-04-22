@@ -45,15 +45,6 @@ class ClipForegroundService : Service() {
 
     private var networkObserver: NetworkChangeObserver? = null
     private var overlayManager: ClipOverlayManager? = null
-    private var clipboardListener: ClipboardManager.OnPrimaryClipChangedListener? = null
-
-    /**
-     * Anti-echo flag: set to true right before an incoming Mac frame writes
-     * to the clipboard, so the clipboard-changed listener does not show the
-     * overlay FAB for content that came from the Mac.
-     */
-    @Volatile
-    private var suppressNextClipChange = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -78,7 +69,7 @@ class ClipForegroundService : Service() {
             handler.post(reconnectRunnable)
         }
         networkObserver?.register()
-        setupClipboardOverlay()
+        overlayManager = ClipOverlayManager(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -96,11 +87,6 @@ class ClipForegroundService : Service() {
         networkObserver = null
         overlayManager?.destroy()
         overlayManager = null
-        clipboardListener?.let {
-            val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            cm.removePrimaryClipChangedListener(it)
-        }
-        clipboardListener = null
         handler.removeCallbacks(reconnectRunnable)
         ws?.cancel()
         ws = null
@@ -121,13 +107,18 @@ class ClipForegroundService : Service() {
                     is ClipClient.WsStatus.Open -> {
                         backoffMs = INITIAL_BACKOFF_MS
                         updateNotification("Connected ($host)")
+                        if (prefs.overlayEnabled) {
+                            handler.post { overlayManager?.showFab() }
+                        }
                     }
                     is ClipClient.WsStatus.Closed -> {
                         updateNotification("Disconnected")
+                        handler.post { overlayManager?.dismiss() }
                         scheduleReconnect()
                     }
                     is ClipClient.WsStatus.Error -> {
                         updateNotification("Error: ${status.message}")
+                        handler.post { overlayManager?.dismiss() }
                         scheduleReconnect()
                     }
                 }
@@ -136,8 +127,6 @@ class ClipForegroundService : Service() {
 
     private fun onFrame(payload: ClipPayload) {
         Log.i(TAG, "frame type=${payload.type} mime=${payload.mime} bytes=${payload.data.length} ts=${payload.ts}")
-        // Suppress the FAB for clipboard writes caused by incoming Mac frames.
-        suppressNextClipChange = true
         try {
             incomingNotifier.notify(payload)
         } catch (t: Throwable) {
@@ -145,22 +134,7 @@ class ClipForegroundService : Service() {
         }
     }
 
-    private fun setupClipboardOverlay() {
-        overlayManager = ClipOverlayManager(this)
-        val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        val listener = ClipboardManager.OnPrimaryClipChangedListener {
-            if (suppressNextClipChange) {
-                suppressNextClipChange = false
-                Log.d(TAG, "Clipboard change suppressed (anti-echo)")
-                return@OnPrimaryClipChangedListener
-            }
-            if (prefs.overlayEnabled) {
-                handler.post { overlayManager?.showFab() }
-            }
-        }
-        cm.addPrimaryClipChangedListener(listener)
-        clipboardListener = listener
-    }
+
 
     private fun scheduleReconnect() {
         handler.removeCallbacks(reconnectRunnable)

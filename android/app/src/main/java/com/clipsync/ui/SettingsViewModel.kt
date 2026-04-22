@@ -21,6 +21,7 @@ sealed class ConnectionStatus {
     data object Disconnected : ConnectionStatus()
     data object Connecting : ConnectionStatus()
     data class Connected(val host: String) : ConnectionStatus()
+    data class Paused(val host: String) : ConnectionStatus()
     data class Error(val reason: String) : ConnectionStatus()
 }
 
@@ -29,6 +30,7 @@ data class SettingsState(
     val discovered: List<Discovered> = emptyList(),
     val status: ConnectionStatus = ConnectionStatus.Disconnected,
     val overlayEnabled: Boolean = true,
+    val syncEnabled: Boolean = true,
     val error: String? = null
 )
 
@@ -41,11 +43,16 @@ class SettingsViewModel : ViewModel() {
 
     fun bootstrap(context: Context) {
         val prefs = Prefs(context)
+        val status = if (prefs.hasPairing()) {
+            if (prefs.syncEnabled) ConnectionStatus.Connected(prefs.host ?: "")
+            else ConnectionStatus.Paused(prefs.host ?: "")
+        } else ConnectionStatus.Disconnected
+        
         _state.value = _state.value.copy(
             mode = prefs.mode,
             overlayEnabled = prefs.overlayEnabled,
-            status = if (prefs.hasPairing()) ConnectionStatus.Connected(prefs.host ?: "")
-                     else ConnectionStatus.Disconnected
+            syncEnabled = prefs.syncEnabled,
+            status = status
         )
         if (prefs.mode == Prefs.MODE_AUTO) startDiscovery(context)
     }
@@ -58,6 +65,20 @@ class SettingsViewModel : ViewModel() {
         val prefs = Prefs(context)
         prefs.overlayEnabled = enabled
         _state.value = _state.value.copy(overlayEnabled = enabled)
+    }
+
+    fun setSyncEnabled(context: Context, enabled: Boolean) {
+        val prefs = Prefs(context)
+        prefs.syncEnabled = enabled
+        
+        val host = prefs.host ?: ""
+        if (enabled) {
+            _state.value = _state.value.copy(syncEnabled = true, status = ConnectionStatus.Connected(host))
+            ClipForegroundService.start(context)
+        } else {
+            _state.value = _state.value.copy(syncEnabled = false, status = ConnectionStatus.Paused(host))
+            ClipForegroundService.stop(context)
+        }
     }
 
     fun startDiscovery(context: Context) {
@@ -132,7 +153,12 @@ class SettingsViewModel : ViewModel() {
         prefs.fp = fp
         prefs.pairingSecret = pairingSecret
         prefs.mode = mode
-        _state.value = _state.value.copy(status = ConnectionStatus.Connected(host), error = null)
+        prefs.syncEnabled = true
+        _state.value = _state.value.copy(
+            syncEnabled = true,
+            status = ConnectionStatus.Connected(host), 
+            error = null
+        )
         ClipForegroundService.start(context)
     }
 

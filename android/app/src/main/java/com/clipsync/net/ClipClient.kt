@@ -2,7 +2,7 @@ package com.clipsync.net
 
 import com.clipsync.crypto.Fingerprint
 import com.clipsync.model.ClipPayload
-import okhttp3.CertificatePinner
+
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
@@ -17,8 +17,9 @@ import javax.net.ssl.X509TrustManager
 /**
  * Factory for the two flavours of [OkHttpClient] we need:
  *
- *  - [pinnedClient]: production client with `CertificatePinner` for the
- *    known server fingerprint. This is what normal connections go through.
+ *  - [pinnedClient]: production client with manual SPKI-SHA256 pin
+ *    verification for the known server fingerprint.  This is what normal
+ *    connections go through.
  *
  *  - [tofuClient]: first-connect permissive client that doesn't validate the
  *    cert chain against system CAs (the server is self-signed), but
@@ -32,12 +33,28 @@ import javax.net.ssl.X509TrustManager
 class ClipClient {
 
     fun pinnedClient(host: String, fpBase64Url: String): OkHttpClient {
-        val pin = Fingerprint.okHttpPin(fpBase64Url)
-        val pinner = CertificatePinner.Builder()
-            .add(host, pin)
-            .build()
+        // OkHttp's CertificatePinner cannot work with a custom TrustManager
+        // (it needs the system chain cleaner to build the peer cert list).
+        // Instead we verify the SPKI-SHA256 fingerprint manually inside the
+        // TrustManager — equally secure, compatible with self-signed certs.
+        val trustPinned = object : X509TrustManager {
+            override fun checkClientTrusted(chain: Array<out X509Certificate>?, authType: String?) {}
+            override fun checkServerTrusted(chain: Array<out X509Certificate>?, authType: String?) {
+                val leaf = chain?.firstOrNull()
+                    ?: throw java.security.cert.CertificateException("Empty certificate chain")
+                val actual = Fingerprint.spkiSha256Base64Url(leaf)
+                if (actual != fpBase64Url) {
+                    throw java.security.cert.CertificateException(
+                        "SPKI pin mismatch! Expected=$fpBase64Url Actual=$actual"
+                    )
+                }
+            }
+            override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
+        }
+        val sslContext = SSLContext.getInstance("TLS")
+        sslContext.init(null, arrayOf(trustPinned), java.security.SecureRandom())
         return baseBuilder()
-            .certificatePinner(pinner)
+            .sslSocketFactory(sslContext.socketFactory, trustPinned)
             .hostnameVerifier { _, _ -> true } // self-signed cert, CN may not match IP
             .build()
     }
