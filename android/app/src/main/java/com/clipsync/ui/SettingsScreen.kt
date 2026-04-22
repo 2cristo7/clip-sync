@@ -12,6 +12,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Divider
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -29,6 +30,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.clipsync.discovery.Discovered
 import com.clipsync.storage.Prefs
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 
 @Composable
 fun SettingsScreen(vm: SettingsViewModel = viewModel()) {
@@ -121,6 +125,41 @@ fun SettingsScreen(vm: SettingsViewModel = viewModel()) {
         state.error?.let {
             Spacer(Modifier.height(16.dp))
             Text("Error: $it", color = androidx.compose.material3.MaterialTheme.colorScheme.error)
+        }
+
+        Spacer(Modifier.height(16.dp))
+        Divider()
+        Spacer(Modifier.height(16.dp))
+        Text("Clipboard Overlay", style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(8.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("Send to Mac FAB")
+                Text(
+                    "Shows a button when you copy something",
+                    style = androidx.compose.material3.MaterialTheme.typography.bodySmall
+                )
+            }
+            Switch(
+                checked = state.overlayEnabled,
+                onCheckedChange = { vm.setOverlayEnabled(context, it) }
+            )
+        }
+        if (state.overlayEnabled && !Settings.canDrawOverlays(context)) {
+            Spacer(Modifier.height(8.dp))
+            Button(onClick = {
+                val intent = Intent(
+                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:${context.packageName}")
+                )
+                context.startActivity(intent)
+            }) {
+                Text("Grant overlay permission")
+            }
         }
     }
 
