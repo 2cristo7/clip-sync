@@ -7,7 +7,7 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import java.util.Base64
+import android.util.Base64
 
 /**
  * Posts a [ClipPayload] to the mac server's `POST /inject` endpoint.
@@ -46,7 +46,7 @@ class ClipSender(
         payload: ClipPayload
     ): Result {
         val secret = try {
-            Base64.getDecoder().decode(pairingSecretB64)
+            Base64.decode(pairingSecretB64, Base64.DEFAULT)
         } catch (t: Throwable) {
             return Result.Failed("invalid secret")
         }
