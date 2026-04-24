@@ -5,7 +5,10 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
+import android.view.View
 import android.widget.Toast
 import com.clipsync.model.ClipPayloadBuilder
 import com.clipsync.storage.Prefs
@@ -17,21 +20,64 @@ import kotlinx.coroutines.withContext
 /**
  * Transparent trampoline Activity launched by the clipboard overlay FAB.
  *
- * Because Android 10+ only allows reading `ClipboardManager.getPrimaryClip()`
- * when the app is in the foreground, this Activity briefly gains focus, reads
- * the clipboard, dispatches the payload to the Mac via [ClipSender], and then
- * calls `finish()`.
+ * Android 10+ restricts ClipboardManager.getPrimaryClip() to apps that have
+ * a focused window (or are the default IME). Two issues prevented this from
+ * working on Pixel / Android 12-13:
  *
- * The entire lifecycle is invisible to the user (translucent theme, no UI).
+ *  1. No setContentView() — without a view hierarchy the window is not fully
+ *     registered in WindowManager and may not receive input focus.
+ *  2. Clipboard was read in onCreate() — the window has not received input
+ *     focus yet at that point; focus arrives later via onWindowFocusChanged().
+ *
+ * Fix: attach a transparent content view so the window is properly set up,
+ * then read clipboard in onWindowFocusChanged(hasFocus=true). A short
+ * postDelayed fallback handles the edge case where a translucent window never
+ * fires onWindowFocusChanged on some devices.
  */
 class SendClipActivity : Activity() {
 
     private val scope = CoroutineScope(Dispatchers.Main)
     private val sender = ClipSender()
+    private val handler = Handler(Looper.getMainLooper())
+
+    // Guard to ensure we only attempt the send once per launch.
+    private var clipboardAttempted = false
+
+    private val fallbackRunnable = Runnable {
+        if (!clipboardAttempted) {
+            clipboardAttempted = true
+            sendClipboard()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        sendClipboard()
+
+        // A real (transparent) content view is required so the window is
+        // properly registered in WindowManager and can receive input focus.
+        // Without this, getPrimaryClip() returns null on Android 10+.
+        setContentView(View(this))
+
+        // Fallback: if onWindowFocusChanged never fires (can happen with
+        // translucent activities on some Android 12-13 builds), read clipboard
+        // after 200 ms — enough time for the window to settle.
+        handler.postDelayed(fallbackRunnable, 200)
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        // Primary trigger: the window now has input focus, so getPrimaryClip()
+        // will return the actual content instead of null.
+        if (hasFocus && !clipboardAttempted) {
+            clipboardAttempted = true
+            handler.removeCallbacks(fallbackRunnable)
+            sendClipboard()
+        }
+    }
+
+    override fun onDestroy() {
+        handler.removeCallbacks(fallbackRunnable)
+        super.onDestroy()
     }
 
     private fun sendClipboard() {
@@ -112,7 +158,6 @@ class SendClipActivity : Activity() {
         when (result) {
             is ClipSender.Result.Ok -> {
                 toast("Sent to Mac")
-                // Notify overlay to show success feedback
                 sendBroadcast(Intent(ACTION_SEND_RESULT).apply {
                     setPackage(packageName)
                     putExtra(EXTRA_SUCCESS, true)
