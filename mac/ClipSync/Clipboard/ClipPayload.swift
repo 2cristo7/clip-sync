@@ -12,6 +12,16 @@ struct ClipPayload: Codable, Sendable, Equatable {
     let ts: Int64
     let nonce: String
 
+    // Wire protocol uses "data" as the key; the Swift property is named
+    // dataBase64 for clarity. CodingKeys bridges the two.
+    enum CodingKeys: String, CodingKey {
+        case type
+        case mime
+        case dataBase64 = "data"
+        case ts
+        case nonce
+    }
+
     init(type: ClipKind, mime: String, dataBase64: String, ts: Int64, nonce: String) {
         self.type = type
         self.mime = mime
