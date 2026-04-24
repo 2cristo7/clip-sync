@@ -61,6 +61,15 @@ class Prefs(context: Context) {
         get() = prefs.getBoolean(K_SYNC_ENABLED, true)
         set(v) { prefs.edit().putBoolean(K_SYNC_ENABLED, v).apply() }
 
+    /**
+     * Whether the AccessibilityService should auto-send clipboard content to
+     * the Mac when the user copies something. Defaults to true.
+     * Independent of [syncEnabled] — the user can receive from Mac but send only manually.
+     */
+    var autoSendEnabled: Boolean
+        get() = prefs.getBoolean(K_AUTO_SEND, true)
+        set(v) { prefs.edit().putBoolean(K_AUTO_SEND, v).apply() }
+
     fun clearPairing() {
         prefs.edit()
             .remove(K_TOKEN)
@@ -81,6 +90,7 @@ class Prefs(context: Context) {
         private const val K_SECRET = "pairing_secret"
         private const val K_OVERLAY = "overlay_enabled"
         private const val K_SYNC_ENABLED = "sync_enabled"
+        private const val K_AUTO_SEND = "auto_send_enabled"
         const val MODE_AUTO = "auto"
         const val MODE_MANUAL = "manual"
     }

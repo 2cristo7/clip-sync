@@ -31,6 +31,7 @@ data class SettingsState(
     val status: ConnectionStatus = ConnectionStatus.Disconnected,
     val overlayEnabled: Boolean = true,
     val syncEnabled: Boolean = true,
+    val autoSendEnabled: Boolean = true,
     val error: String? = null
 )
 
@@ -52,6 +53,7 @@ class SettingsViewModel : ViewModel() {
             mode = prefs.mode,
             overlayEnabled = prefs.overlayEnabled,
             syncEnabled = prefs.syncEnabled,
+            autoSendEnabled = prefs.autoSendEnabled,
             status = status
         )
         if (prefs.mode == Prefs.MODE_AUTO) startDiscovery(context)
@@ -65,6 +67,12 @@ class SettingsViewModel : ViewModel() {
         val prefs = Prefs(context)
         prefs.overlayEnabled = enabled
         _state.value = _state.value.copy(overlayEnabled = enabled)
+    }
+
+    fun setAutoSendEnabled(context: Context, enabled: Boolean) {
+        val prefs = Prefs(context)
+        prefs.autoSendEnabled = enabled
+        _state.value = _state.value.copy(autoSendEnabled = enabled)
     }
 
     fun setSyncEnabled(context: Context, enabled: Boolean) {

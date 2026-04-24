@@ -3,6 +3,7 @@ package com.clipsync.ui
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import android.text.TextUtils
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -245,6 +246,49 @@ fun SettingsScreen(vm: SettingsViewModel = viewModel()) {
                 }
             }
 
+            // Auto-send toggle (requires Accessibility Service enabled by user)
+            NeuSectionHeader("Auto Send")
+            NeuCard {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                "Send automatically on copy",
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                            Text(
+                                "Sends clipboard to Mac as soon as you copy",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        Switch(
+                            checked = state.autoSendEnabled,
+                            onCheckedChange = { vm.setAutoSendEnabled(context, it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = NeuColors.Accent,
+                                checkedTrackColor = NeuColors.Accent.copy(alpha = 0.3f),
+                                uncheckedThumbColor = NeuColors.TextSecondary,
+                                uncheckedTrackColor = NeuColors.DarkShadow.copy(alpha = 0.3f),
+                            )
+                        )
+                    }
+                    if (state.autoSendEnabled && !isAccessibilityServiceEnabled(context)) {
+                        NeuButton(
+                            onClick = {
+                                context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                            },
+                            isAccent = true,
+                        ) {
+                            Text("Enable in Accessibility Settings", color = NeuColors.TextOnAccent)
+                        }
+                    }
+                }
+            }
+
             // Error message
             state.error?.let { error ->
                 NeuCard {
@@ -391,4 +435,18 @@ private fun PairingCodeDialog(
 sealed class PairingTarget {
     data class Auto(val discovered: Discovered) : PairingTarget()
     data class Manual(val host: String, val port: Int) : PairingTarget()
+}
+
+private fun isAccessibilityServiceEnabled(context: android.content.Context): Boolean {
+    val service = "${context.packageName}/.accessibility.ClipAccessibilityService"
+    val enabledServices = Settings.Secure.getString(
+        context.contentResolver,
+        Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
+    ) ?: return false
+    val splitter = TextUtils.SimpleStringSplitter(':')
+    splitter.setString(enabledServices)
+    while (splitter.hasNext()) {
+        if (splitter.next().equals(service, ignoreCase = true)) return true
+    }
+    return false
 }
