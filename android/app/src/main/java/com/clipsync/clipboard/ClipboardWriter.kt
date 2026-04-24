@@ -16,6 +16,13 @@ object ClipboardWriter {
 
     const val LABEL = "clipsync"
 
+    /**
+     * Timestamp (ms) of the last time WE wrote to the clipboard (i.e. incoming
+     * content from the Mac). Used by auto-send listeners to suppress echo:
+     * if a clipboard-change event fires within 2 s of our own write, we skip it.
+     */
+    @Volatile var lastMacWriteMs: Long = 0L
+
     /** Build a plain text [ClipData]. Pure: no Android framework I/O. */
     fun buildTextClip(text: String): ClipData = ClipData.newPlainText(LABEL, text)
 
@@ -32,12 +39,14 @@ object ClipboardWriter {
 
     /** Write the given text to the primary clipboard. */
     fun writeText(context: Context, text: String) {
+        lastMacWriteMs = System.currentTimeMillis()
         val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         cm.setPrimaryClip(buildTextClip(text))
     }
 
     /** Write an image referenced by [uri] to the primary clipboard. */
     fun writeImage(context: Context, uri: Uri, mime: String) {
+        lastMacWriteMs = System.currentTimeMillis()
         val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         cm.setPrimaryClip(buildImageClip(context.contentResolver, uri, mime))
     }
