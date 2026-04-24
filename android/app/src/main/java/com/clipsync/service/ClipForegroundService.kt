@@ -4,7 +4,6 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
-import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import com.clipsync.net.NetworkChangeObserver
@@ -13,13 +12,11 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.clipsync.app.R
-import com.clipsync.clipboard.ClipboardWriter
 import com.clipsync.images.ImageCache
 import com.clipsync.model.ClipPayload
 import com.clipsync.net.ClipClient
 import com.clipsync.notifications.IncomingClipNotifier
 import com.clipsync.overlay.ClipOverlayManager
-import com.clipsync.overlay.SendClipActivity
 import com.clipsync.storage.Prefs
 import okhttp3.WebSocket
 import kotlin.math.min
@@ -31,8 +28,8 @@ import kotlin.math.min
  *  - exponential backoff capped at [MAX_BACKOFF_MS].
  *  - immediate reconnect whenever the default network changes.
  *
- * Incoming frames are logged via `Log.i("ClipSync", ...)` per the Phase 5
- * scope; actual clipboard writes land in Phase 6.
+ * Incoming frames are forwarded to [IncomingClipNotifier].
+ * Outbound sends are triggered manually via the overlay FAB → [SendClipActivity].
  */
 class ClipForegroundService : Service() {
 
@@ -47,18 +44,6 @@ class ClipForegroundService : Service() {
 
     private var networkObserver: NetworkChangeObserver? = null
     private var overlayManager: ClipOverlayManager? = null
-    private lateinit var clipboardManager: ClipboardManager
-    private var lastAutoSendMs: Long = 0L
-
-    // Detects when the user copies something and auto-sends to Mac.
-    // Note: getPrimaryClip() from a background service returns null on Android 10+,
-    // so we only detect the event here and delegate reading + sending to
-    // SendClipActivity, which can read clipboard because it is a foreground Activity.
-    // The app holds SYSTEM_ALERT_WINDOW which exempts it from Android 12+ background
-    // activity start restrictions.
-    private val autoSendListener = ClipboardManager.OnPrimaryClipChangedListener {
-        handleAutoSend()
-    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -84,8 +69,6 @@ class ClipForegroundService : Service() {
         }
         networkObserver?.register()
         overlayManager = ClipOverlayManager(this)
-        clipboardManager = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        clipboardManager.addPrimaryClipChangedListener(autoSendListener)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -99,7 +82,6 @@ class ClipForegroundService : Service() {
     }
 
     override fun onDestroy() {
-        clipboardManager.removePrimaryClipChangedListener(autoSendListener)
         networkObserver?.unregister()
         networkObserver = null
         overlayManager?.destroy()
@@ -108,19 +90,6 @@ class ClipForegroundService : Service() {
         ws?.cancel()
         ws = null
         super.onDestroy()
-    }
-
-    private fun handleAutoSend() {
-        if (!prefs.autoSendEnabled) return
-        if (!prefs.syncEnabled) return
-        if (!prefs.hasPairing()) return
-        // Echo guard: skip if we wrote to clipboard ourselves in the last 2 s
-        if (System.currentTimeMillis() - ClipboardWriter.lastMacWriteMs < ECHO_GUARD_MS) return
-        // Debounce: skip if we already triggered a send in the last 2 s
-        val now = System.currentTimeMillis()
-        if (now - lastAutoSendMs < ECHO_GUARD_MS) return
-        lastAutoSendMs = now
-        startActivity(SendClipActivity.intent(this))
     }
 
     private fun connect() {
@@ -163,8 +132,6 @@ class ClipForegroundService : Service() {
             Log.w(TAG, "notify failed: ${t.message}")
         }
     }
-
-
 
     private fun scheduleReconnect() {
         handler.removeCallbacks(reconnectRunnable)
@@ -211,7 +178,6 @@ class ClipForegroundService : Service() {
         private const val NOTIF_ID = 4242
         private const val INITIAL_BACKOFF_MS = 1_000L
         private const val MAX_BACKOFF_MS = 30_000L
-        private const val ECHO_GUARD_MS = 2_000L
 
         fun start(context: Context) {
             val i = Intent(context, ClipForegroundService::class.java)
