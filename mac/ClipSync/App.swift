@@ -123,7 +123,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func startPairing() {
         Task { @MainActor in
             do {
-                let session = try await pairing.startPairing()
+                // Reuse an existing valid session so the window always shows the
+                // same code the server is expecting. Without this, clicking
+                // "Start Pairing…" a second time generates a new code on the
+                // server while the already-open window keeps displaying the old
+                // one, causing every correct entry to be rejected as "invalid".
+                let session: PairingSession
+                if let existing = await pairing.currentSession() {
+                    session = existing
+                } else {
+                    session = try await pairing.startPairing()
+                }
                 let hostname = ProcessInfo.processInfo.hostName
                 pairingWindow.show(
                     code: session.code,
