@@ -206,14 +206,67 @@ Si hay un fallo:
 
 ### 5. Notas específicas del proyecto
 
-- Las fases 0-3 ya están mergeadas en `main`. El pipeline arranca en la
-  Fase 4.
-- El target macOS es 14.0 (Hummingbird 2.x).
+#### Estado del pipeline
+- **Todas las fases 0–9 están mergeadas en `main`. Tag `v0.1.0` creado.**
+  El pipeline original está completo. Cualquier trabajo nuevo empieza
+  desde `main` directamente o abre un nuevo ciclo de fases.
+
+#### Stack y targets
+- Target macOS: **14.0** (Hummingbird 2.x requiere macOS 14).
+- Target Android: **API 33** (Android 13+).
 - `Package.resolved` está en `.gitignore` — no lo commitees.
-- Para editar `mac/ClipSync.xcodeproj/project.pbxproj`, usa el patrón
-  existente (`objectVersion 56`, IDs hex de 24 chars). Los rangos
-  `A00000000000000000001800+` están libres a partir de Fase 4.
-- `NSBonjourServices` en `Info.plist` ya incluye `_clipsync._tcp`.
-- El pairing-secret vive en Keychain bajo
-  `com.clipsync.pairing-secret`. Un nuevo secreto invalida todos los
-  tokens emitidos (lo cubrirá la Fase 4).
+
+#### Estructura de archivos fuente (estado tras v0.1.0 + parches del 22 abr 2026)
+
+**Mac — 17 archivos Swift** (`mac/ClipSync/`):
+`App`, `Clipboard/{ClipPayload,PasteboardInjector,PasteboardWatcher}`,
+`Network/{BonjourAdvertiser,ReachabilityMonitor}`,
+`Pairing/{PairingManager,TokenStore}`,
+`Security/{HMACValidator,TLSManager}`,
+`Server/{AuthMiddleware,ClipServer,ServerConfig,WebSocketHub}`,
+`Storage/Keychain`, `UI/{MenuBarController,PairingWindow}`
+
+**Android — 22 archivos Kotlin** (`android/app/src/main/java/com/clipsync/`):
+`MainActivity`, `clipboard/ClipboardWriter`, `crypto/{Fingerprint,HmacSigner}`,
+`discovery/NsdDiscovery`, `images/ImageCache`,
+`model/{ClipPayload,ClipPayloadBuilder}`,
+`net/{ClipClient,NetworkChangeObserver,PairingApi}`,
+`notifications/{ApplyClipActivity,IncomingClipNotifier}`,
+`overlay/{ClipOverlayManager,ClipSender,SendClipActivity}`,
+`service/ClipForegroundService`, `storage/Prefs`,
+`ui/{SettingsScreen,SettingsViewModel,theme/ClipSyncTheme,theme/NeuComponents}`
+
+#### Características implementadas
+- Sync en tiempo real por WebSocket (LAN + Tailscale).
+- TOFU pairing con HMAC (timestamp ±60s); pairing-secret en Keychain
+  (`com.clipsync.pairing-secret`). Un nuevo secreto invalida todos los tokens.
+- **FAB overlay persistente** en Android (`ClipOverlayManager`): burbuja
+  flotante sobre cualquier app; toca para enviar clipboard al Mac vía
+  `POST /inject`. Permiso `SYSTEM_ALERT_WINDOW` requerido.
+- **Pausa/reanudación de sync** desde la burbuja FAB o el menú de settings.
+- UI **neumórfica** en Android (`ClipSyncTheme` + `NeuComponents`).
+- `NetworkChangeObserver` (Android) y `ReachabilityMonitor` (Mac): reconexión
+  automática al cambiar de red.
+- Share target **eliminado** (rama `chore/remove-share-target`, 22 abr 2026).
+- CI en `.github/workflows/ci.yml` (mac + android jobs, push a main y PRs).
+
+#### pbxproj
+- Patrón: `objectVersion 56`, IDs hex de 24 chars.
+- Último rango usado: `A000000000000000000024xx`.
+- Próximo rango libre: `A000000000000000000025xx`.
+- Proyecto migrado a **Xcode 26** (`LastUpgradeCheck = 2620`, scheme version `1.3`).
+- `DEVELOPMENT_TEAM = 8FNGRJHHV4` configurado en ambas configs (Debug/Release).
+- `DEAD_CODE_STRIPPING = YES` y `STRING_CATALOG_GENERATE_SYMBOLS = YES` activos.
+
+#### Deuda técnica conocida
+- `TokenStore.revoke()` existe pero no está cableado al menú bar (UI pendiente).
+- No hay rotación de pairing-secret desde la UI.
+- Code signing macOS: team ID `8FNGRJHHV4` configurado pero sin certificado/provisioning profile; builds sin firmar funcionan (`CODE_SIGN_IDENTITY = "-"`). Firma APK Android sin configurar.
+- mDNS no funciona sobre Tailscale (sin multicast); documentado en
+  `docs/tailscale-setup.md`.
+- `NSBonjourServices` en `Info.plist` incluye `_clipsync._tcp`.
+
+#### Notas de UI
+- `PairingWindow` tiene tamaño fijo **380×460** pt (no redimensionable).
+- El QR se genera una sola vez en `onAppear` y se cachea en `@State` —
+  no recomputar en cada render.
