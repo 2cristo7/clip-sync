@@ -139,7 +139,10 @@ final class ClipServer {
                 "nonce": .string(payload.nonce),
             ])
             do {
-                try injector.inject(payload)
+                // NSPasteboard must be driven from the main thread; dispatch explicitly
+                // even though Apple marks it as thread-safe, calling it from an NIO
+                // event-loop thread in a .accessory menu-bar app returns false silently.
+                try await MainActor.run { try injector.inject(payload) }
             } catch {
                 context.logger.error("inject failed: \(error)")
                 throw HTTPError(.badRequest, message: String(describing: error))

@@ -11,6 +11,7 @@ struct PairingView: View {
     let port: Int
 
     @State private var remaining: TimeInterval = 0
+    @State private var cachedQRImage: NSImage?
 
     var body: some View {
         VStack(spacing: 20) {
@@ -19,7 +20,7 @@ struct PairingView: View {
             Text(formattedCode)
                 .font(.system(size: 52, weight: .semibold, design: .monospaced))
                 .tracking(6)
-            if let qr = qrImage {
+            if let qr = cachedQRImage {
                 Image(nsImage: qr)
                     .interpolation(.none)
                     .resizable()
@@ -34,8 +35,11 @@ struct PairingView: View {
                 .textSelection(.enabled)
         }
         .padding(28)
-        .frame(minWidth: 320)
-        .onAppear { updateRemaining() }
+        .frame(width: 380, height: 460)
+        .onAppear {
+            cachedQRImage = Self.generateQRImage(for: pairingURL)
+            updateRemaining()
+        }
         .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { _ in
             updateRemaining()
         }
@@ -55,9 +59,9 @@ struct PairingView: View {
         remaining = max(0, expiresAt.timeIntervalSinceNow)
     }
 
-    private var qrImage: NSImage? {
+    private static func generateQRImage(for string: String) -> NSImage? {
         let filter = CIFilter.qrCodeGenerator()
-        filter.message = Data(pairingURL.utf8)
+        filter.message = Data(string.utf8)
         filter.correctionLevel = "M"
         guard let output = filter.outputImage else { return nil }
         let scaled = output.transformed(by: CGAffineTransform(scaleX: 8, y: 8))
@@ -72,6 +76,8 @@ struct PairingView: View {
 final class PairingWindowController {
     private var window: NSWindow?
 
+    private static let windowSize = NSSize(width: 380, height: 460)
+
     func show(code: String, expiresAt: Date, hostname: String, port: Int) {
         if let window {
             window.makeKeyAndOrderFront(nil)
@@ -85,10 +91,14 @@ final class PairingWindowController {
             port: port
         )
         let hosting = NSHostingController(rootView: view)
+        hosting.sizingOptions = []
         let win = NSWindow(contentViewController: hosting)
         win.title = "Pair Device"
         win.styleMask = [.titled, .closable]
         win.isReleasedWhenClosed = false
+        win.setContentSize(Self.windowSize)
+        win.contentMinSize = Self.windowSize
+        win.contentMaxSize = Self.windowSize
         win.center()
         win.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
