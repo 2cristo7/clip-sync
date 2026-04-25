@@ -29,6 +29,7 @@ data class SettingsState(
     val mode: String = Prefs.MODE_AUTO,
     val discovered: List<Discovered> = emptyList(),
     val status: ConnectionStatus = ConnectionStatus.Disconnected,
+    val hasPairing: Boolean = false,
     val overlayEnabled: Boolean = true,
     val syncEnabled: Boolean = true,
     val autoSendEnabled: Boolean = true,
@@ -43,20 +44,26 @@ class SettingsViewModel : ViewModel() {
     private var discoveryJob: Job? = null
 
     fun bootstrap(context: Context) {
-        val prefs = Prefs(context)
-        val status = if (prefs.hasPairing()) {
-            if (prefs.syncEnabled) ConnectionStatus.Connected(prefs.host ?: "")
-            else ConnectionStatus.Paused(prefs.host ?: "")
-        } else ConnectionStatus.Disconnected
-        
-        _state.value = _state.value.copy(
-            mode = prefs.mode,
-            overlayEnabled = prefs.overlayEnabled,
-            syncEnabled = prefs.syncEnabled,
-            autoSendEnabled = prefs.autoSendEnabled,
-            status = status
-        )
-        if (prefs.mode == Prefs.MODE_AUTO) startDiscovery(context)
+        try {
+            val prefs = Prefs(context)
+            val paired = prefs.hasPairing()
+            val status = if (paired) {
+                if (prefs.syncEnabled) ConnectionStatus.Connected(prefs.host ?: "")
+                else ConnectionStatus.Paused(prefs.host ?: "")
+            } else ConnectionStatus.Disconnected
+
+            _state.value = _state.value.copy(
+                mode = prefs.mode,
+                overlayEnabled = prefs.overlayEnabled,
+                syncEnabled = prefs.syncEnabled,
+                autoSendEnabled = prefs.autoSendEnabled,
+                hasPairing = paired,
+                status = status
+            )
+            if (prefs.mode == Prefs.MODE_AUTO) startDiscovery(context)
+        } catch (t: Throwable) {
+            Log.e(TAG, "bootstrap failed reading prefs", t)
+        }
     }
 
     fun setMode(mode: String) {
@@ -164,7 +171,8 @@ class SettingsViewModel : ViewModel() {
         prefs.syncEnabled = true
         _state.value = _state.value.copy(
             syncEnabled = true,
-            status = ConnectionStatus.Connected(host), 
+            hasPairing = true,
+            status = ConnectionStatus.Connected(host),
             error = null
         )
         ClipForegroundService.start(context)

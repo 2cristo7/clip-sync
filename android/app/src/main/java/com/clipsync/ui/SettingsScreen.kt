@@ -107,7 +107,7 @@ fun SettingsScreen(vm: SettingsViewModel = viewModel()) {
                         }
                     }
 
-                    if (state.status !is ConnectionStatus.Disconnected) {
+                    if (state.hasPairing) {
                         val isPaused = state.status is ConnectionStatus.Paused
                         NeuButton(
                             onClick = { vm.setSyncEnabled(context, isPaused) },
