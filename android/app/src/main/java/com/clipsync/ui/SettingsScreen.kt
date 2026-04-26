@@ -343,8 +343,8 @@ fun SettingsScreen(
             // Discovery / Manual section
             AnimatedVisibility(
                 visible = state.mode == Prefs.MODE_AUTO,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
+                enter = fadeIn() + expandVertically(clip = false),
+                exit = fadeOut() + shrinkVertically(clip = false)
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     NeuSectionHeader("Discovered Servers")
@@ -378,8 +378,8 @@ fun SettingsScreen(
 
             AnimatedVisibility(
                 visible = state.mode == Prefs.MODE_MANUAL,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
+                enter = fadeIn() + expandVertically(clip = false),
+                exit = fadeOut() + shrinkVertically(clip = false)
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     NeuSectionHeader("Manual Connection")
