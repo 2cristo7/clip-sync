@@ -8,6 +8,8 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import android.content.pm.PackageManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import androidx.core.content.ContextCompat
 import com.clipsync.discovery.Discovered
 import com.clipsync.discovery.NsdDiscovery
@@ -39,6 +41,12 @@ sealed class ShizukuInstallState {
     data class Error(val message: String) : ShizukuInstallState()
 }
 
+sealed class TailscaleState {
+    data object Unknown : TailscaleState()
+    data object NotInstalled : TailscaleState()
+    data object Installed : TailscaleState()
+}
+
 sealed class ConnectionStatus {
     data object Disconnected : ConnectionStatus()
     data object Connecting : ConnectionStatus()
@@ -60,6 +68,8 @@ data class SettingsState(
     val notificationPermissionGranted: Boolean = false,
     val shizukuState: String = "not_checked",
     val shizukuInstall: ShizukuInstallState = ShizukuInstallState.Idle,
+    val tailscaleState: TailscaleState = TailscaleState.Unknown,
+    val isOnMobileData: Boolean = false,
     val error: String? = null
 )
 
@@ -91,6 +101,7 @@ class SettingsViewModel : ViewModel() {
             )
             if (prefs.mode == Prefs.MODE_AUTO) startDiscovery(context)
             refreshShizukuState(context)
+            refreshTailscaleState(context)
 
             if (paired) {
                 val host = prefs.host ?: return
@@ -276,6 +287,7 @@ class SettingsViewModel : ViewModel() {
             notificationPermissionGranted = notifGranted,
         )
         refreshShizukuState(context)
+        refreshTailscaleState(context)
     }
 
     fun onMediaPermissionResult(granted: Boolean) {
@@ -412,6 +424,46 @@ class SettingsViewModel : ViewModel() {
         } catch (e: Exception) {
             L.warn(M, "requestShizukuPermission failed: ${e.message}")
         }
+    }
+
+    fun refreshTailscaleState(context: Context) {
+        val packages = listOf("com.tailscale.ipn", "com.tailscale.ipn.fdroid")
+        val installed = packages.any { pkg ->
+            try {
+                @Suppress("DEPRECATION")
+                context.packageManager.getPackageInfo(pkg, 0)
+                true
+            } catch (_: PackageManager.NameNotFoundException) {
+                false
+            }
+        }
+        val onMobile = isOnMobileData(context)
+        L.event(M, "tailscale check: installed=$installed onMobile=$onMobile")
+        _state.value = _state.value.copy(
+            tailscaleState = if (installed) TailscaleState.Installed else TailscaleState.NotInstalled,
+            isOnMobileData = onMobile
+        )
+    }
+
+    fun openTailscalePlayStore(context: Context) {
+        L.action(M, "openTailscalePlayStore")
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=com.tailscale.ipn"))
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        try {
+            context.startActivity(intent)
+        } catch (_: Exception) {
+            context.startActivity(
+                Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=com.tailscale.ipn"))
+                    .apply { flags = Intent.FLAG_ACTIVITY_NEW_TASK }
+            )
+        }
+    }
+
+    private fun isOnMobileData(context: Context): Boolean {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false
+        val network = cm.activeNetwork ?: return false
+        val caps = cm.getNetworkCapabilities(network) ?: return false
+        return caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
     }
 
     companion object {
