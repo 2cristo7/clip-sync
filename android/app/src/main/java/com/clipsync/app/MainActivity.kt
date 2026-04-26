@@ -1,7 +1,7 @@
 package com.clipsync.app
 
 import android.os.Bundle
-import android.util.Log
+import com.clipsync.util.L
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -20,7 +20,7 @@ import com.clipsync.ui.theme.ClipSyncTheme
 import com.clipsync.ui.theme.NeuColors
 
 class MainActivity : ComponentActivity() {
-    companion object { private const val TAG = "ClipSync/UI" }
+    companion object { private const val M = "UI" }
     override fun onCreate(savedInstanceState: Bundle?) {
         val darkScrim = android.graphics.Color.TRANSPARENT
         enableEdgeToEdge(
@@ -49,7 +49,7 @@ class MainActivity : ComponentActivity() {
                         isDark = isDark,
                         onToggleTheme = {
                             isDark = !isDark
-                            Log.i(TAG, "action=toggleTheme isDark=$isDark")
+                            L.action(M, "toggleTheme isDark=$isDark")
                             themePrefs.edit().putBoolean("dark_mode", isDark).apply()
                             val style = if (isDark) SystemBarStyle.dark(darkScrim)
                                 else SystemBarStyle.light(darkScrim, darkScrim)

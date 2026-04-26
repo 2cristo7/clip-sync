@@ -5,7 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
-import android.util.Log
+import com.clipsync.util.L
 import android.widget.Toast
 import com.clipsync.clipboard.ClipboardWriter
 import com.clipsync.overlay.ClipOverlayManager
@@ -37,7 +37,7 @@ class ApplyClipActivity : Activity() {
             ACTION_APPLY_TEXT -> {
                 val text = intent.getStringExtra(EXTRA_TEXT)
                 if (text.isNullOrEmpty()) {
-                    Log.w(TAG, "ACTION_APPLY_TEXT with empty extra")
+                    L.warn(M, "ACTION_APPLY_TEXT with empty extra")
                     return
                 }
                 ClipboardWriter.writeText(this, text)
@@ -47,7 +47,7 @@ class ApplyClipActivity : Activity() {
                 val uriStr = intent.getStringExtra(EXTRA_URI)
                 val mime = intent.getStringExtra(EXTRA_MIME) ?: "image/*"
                 if (uriStr.isNullOrEmpty()) {
-                    Log.w(TAG, "ACTION_APPLY_IMAGE with empty uri")
+                    L.warn(M, "ACTION_APPLY_IMAGE with empty uri")
                     return
                 }
                 val uri = Uri.parse(uriStr)
@@ -56,12 +56,12 @@ class ApplyClipActivity : Activity() {
                     broadcastLoading(show = false, success = true)
                     toast("Image copied to clipboard")
                 } catch (t: Throwable) {
-                    Log.w(TAG, "writeImage failed: ${t.message}")
+                    L.warn(M, "writeImage failed: ${t.message}")
                     broadcastLoading(show = false, success = false)
                     toast("Failed to copy image")
                 }
             }
-            else -> Log.w(TAG, "Unknown action: ${intent.action}")
+            else -> L.warn(M, "Unknown action: ${intent.action}")
         }
     }
 
@@ -79,7 +79,7 @@ class ApplyClipActivity : Activity() {
     }
 
     companion object {
-        private const val TAG = "ClipSync"
+        private const val M = "Apply"
         const val ACTION_APPLY_TEXT = "com.clipsync.action.APPLY_TEXT"
         const val ACTION_APPLY_IMAGE = "com.clipsync.action.APPLY_IMAGE"
         const val EXTRA_TEXT = "com.clipsync.extra.TEXT"

@@ -2,7 +2,7 @@ package com.clipsync.shizuku
 
 import android.content.ClipData
 import android.os.IBinder
-import android.util.Log
+import com.clipsync.util.L
 import java.lang.reflect.Method
 import rikka.shizuku.SystemServiceHelper
 
@@ -82,7 +82,7 @@ class ClipboardUserService : IClipUserService.Stub() {
         val m = clipboard.javaClass.methods
             .filter { it.name == name }
             .maxByOrNull { it.parameterCount }
-        if (m == null) Log.e(TAG, "Method $name not found on IClipboard")
+        if (m == null) L.error(M, "Method $name not found on IClipboard")
         return m
     }
 
@@ -92,10 +92,10 @@ class ClipboardUserService : IClipUserService.Stub() {
             val args = buildArgs(method, firstArg = PACKAGE)
             method.invoke(clipboard, *args) as? ClipData
         } catch (e: java.lang.reflect.InvocationTargetException) {
-            Log.w(TAG, "getPrimaryClip failed (cause): ${e.cause}")
+            L.warn(M, "getPrimaryClip failed (cause): ${e.cause}")
             null
         } catch (e: Exception) {
-            Log.w(TAG, "getPrimaryClip failed: $e")
+            L.warn(M, "getPrimaryClip failed: $e")
             null
         }
     }
@@ -106,9 +106,9 @@ class ClipboardUserService : IClipUserService.Stub() {
             val args = buildArgs(method, firstArg = clip)
             method.invoke(clipboard, *args)
         } catch (e: java.lang.reflect.InvocationTargetException) {
-            Log.w(TAG, "setPrimaryClip failed (cause): ${e.cause}")
+            L.warn(M, "setPrimaryClip failed (cause): ${e.cause}")
         } catch (e: Exception) {
-            Log.w(TAG, "setPrimaryClip failed: $e")
+            L.warn(M, "setPrimaryClip failed: $e")
         }
     }
 
@@ -140,7 +140,7 @@ class ClipboardUserService : IClipUserService.Stub() {
     }
 
     companion object {
-        private const val TAG = "ClipSync/UserService"
+        private const val M = "UserSvc"
         // UserService runs as UID 2000 (shell). We pass our own app package so the
         // system clipboard access notification shows "ClipSync" instead of "Shell".
         // Shell UID typically bypasses package/UID validation on most ROMs.

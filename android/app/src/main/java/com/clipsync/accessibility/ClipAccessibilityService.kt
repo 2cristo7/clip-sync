@@ -7,7 +7,7 @@ import android.content.Intent
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
+import com.clipsync.util.L
 import android.view.accessibility.AccessibilityEvent
 import com.clipsync.clipboard.ClipboardWriter
 import com.clipsync.overlay.SendClipActivity
@@ -49,7 +49,7 @@ class ClipAccessibilityService : AccessibilityService() {
             hashSeeded = true
         }
         handler.post(pollRunnable)
-        Log.i(TAG, "ClipAccessibilityService connected, polling every ${POLL_MS}ms (seed hash=$lastClipHash, seeded=$hashSeeded)")
+        L.event(M, "ClipAccessibilityService connected, polling every ${POLL_MS}ms (seed hash=$lastClipHash, seeded=$hashSeeded)")
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent) = Unit
@@ -58,7 +58,7 @@ class ClipAccessibilityService : AccessibilityService() {
     override fun onUnbind(intent: Intent?): Boolean {
         if (Build.VERSION.SDK_INT > Build.VERSION_CODES.R) return super.onUnbind(intent)
         handler.removeCallbacks(pollRunnable)
-        Log.i(TAG, "ClipAccessibilityService unbound")
+        L.event(M, "ClipAccessibilityService unbound")
         return super.onUnbind(intent)
     }
 
@@ -68,13 +68,13 @@ class ClipAccessibilityService : AccessibilityService() {
 
         val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         val clip = try { cm.primaryClip } catch (e: Exception) {
-            Log.w(TAG, "getPrimaryClip() threw: ${e.message}")
+            L.warn(M, "getPrimaryClip() threw: ${e.message}")
             null
         }
 
         if (verbose) {
             val desc = if (clip == null) "NULL" else "itemCount=${clip.itemCount}"
-            Log.d(TAG, "poll #$pollCount: clip=$desc lastHash=$lastClipHash")
+            L.verbose(M, "poll #$pollCount: clip=$desc lastHash=$lastClipHash")
         }
 
         if (clip == null || clip.itemCount == 0) return
@@ -84,7 +84,7 @@ class ClipAccessibilityService : AccessibilityService() {
         val hash = content.hashCode()
 
         if (verbose) {
-            Log.d(TAG, "  preview='${content.take(40)}' hash=$hash")
+            L.verbose(M, "  preview='${content.take(40)}' hash=$hash")
         }
 
         if (hash == 0 || hash == lastClipHash) return
@@ -94,24 +94,24 @@ class ClipAccessibilityService : AccessibilityService() {
         if (!hashSeeded) {
             lastClipHash = hash
             hashSeeded = true
-            Log.d(TAG, "Hash seeded on first read: $hash")
+            L.verbose(M, "Hash seeded on first read: $hash")
             return
         }
 
-        Log.i(TAG, "Hash changed $lastClipHash -> $hash  preview='${content.take(60)}'")
+        L.event(M, "Hash changed $lastClipHash -> $hash  preview='${content.take(60)}'")
         lastClipHash = hash
 
         val prefs = Prefs(applicationContext)
-        if (!prefs.autoSendEnabled) { Log.d(TAG, "skip: autoSendEnabled=false"); return }
-        if (!prefs.syncEnabled)     { Log.d(TAG, "skip: syncEnabled=false"); return }
-        if (!prefs.hasPairing())    { Log.d(TAG, "skip: no pairing"); return }
+        if (!prefs.autoSendEnabled) { L.verbose(M, "skip: autoSendEnabled=false"); return }
+        if (!prefs.syncEnabled)     { L.verbose(M, "skip: syncEnabled=false"); return }
+        if (!prefs.hasPairing())    { L.verbose(M, "skip: no pairing"); return }
 
         val now = System.currentTimeMillis()
-        if (now - ClipboardWriter.lastMacWriteMs < 2_000) { Log.d(TAG, "skip: echo"); return }
-        if (now - lastAutoSendMs < 1_000)                 { Log.d(TAG, "skip: debounce"); return }
+        if (now - ClipboardWriter.lastMacWriteMs < 2_000) { L.verbose(M, "skip: echo"); return }
+        if (now - lastAutoSendMs < 1_000)                 { L.verbose(M, "skip: debounce"); return }
 
         lastAutoSendMs = now
-        Log.i(TAG, "-> launching auto-send")
+        L.event(M, "-> launching auto-send")
         startActivity(SendClipActivity.intent(this).putExtra(SendClipActivity.EXTRA_AUTO_SEND, true))
     }
 
@@ -126,7 +126,7 @@ class ClipAccessibilityService : AccessibilityService() {
     }
 
     companion object {
-        private const val TAG = "ClipSync"
+        private const val M = "A11Y"
         private const val POLL_MS = 500L
     }
 }

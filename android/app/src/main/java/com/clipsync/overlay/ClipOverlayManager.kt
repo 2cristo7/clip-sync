@@ -16,7 +16,7 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
-import android.util.Log
+import com.clipsync.util.L
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
@@ -72,7 +72,7 @@ class ClipOverlayManager(private val context: Context) {
         if (fabView != null) return
 
         if (!Settings.canDrawOverlays(context)) {
-            Log.d(TAG, "SYSTEM_ALERT_WINDOW not granted — skipping overlay")
+            L.verbose(M, "SYSTEM_ALERT_WINDOW not granted — skipping overlay")
             return
         }
 
@@ -105,7 +105,7 @@ class ClipOverlayManager(private val context: Context) {
             wm.addView(view, params)
             fabView = view
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to add overlay: ${e.message}")
+            L.error(M, "Failed to add overlay: ${e.message}")
             return
         }
 
@@ -342,7 +342,7 @@ class ClipOverlayManager(private val context: Context) {
     }
 
     companion object {
-        private const val TAG = "ClipSync/Overlay"
+        private const val M = "FAB"
         const val ACTION_SHOW_LOADING = "com.clipsync.action.SHOW_LOADING"
         const val ACTION_HIDE_LOADING = "com.clipsync.action.HIDE_LOADING"
         const val EXTRA_LOADING_SUCCESS = "loading_success"

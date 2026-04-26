@@ -1,10 +1,12 @@
 package com.clipsync.ui
 
+import android.Manifest
 import android.content.Context
-import android.util.Log
+import android.os.Build
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
 import com.clipsync.discovery.Discovered
 import com.clipsync.discovery.NsdDiscovery
 import com.clipsync.net.PairingApi
@@ -13,6 +15,7 @@ import com.clipsync.service.ClipForegroundService
 import com.clipsync.shizuku.ShizukuClipboardManager
 import android.provider.Settings
 import com.clipsync.storage.Prefs
+import com.clipsync.util.L
 import rikka.shizuku.Shizuku
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -41,6 +44,7 @@ data class SettingsState(
     val overlayPermissionGranted: Boolean = false,
     val syncEnabled: Boolean = true,
     val autoSendEnabled: Boolean = true,
+    val mediaPermissionGranted: Boolean = false,
     val shizukuState: String = "not_checked",
     val error: String? = null
 )
@@ -58,9 +62,9 @@ class SettingsViewModel : ViewModel() {
             val paired = prefs.hasPairing()
             val overlayGranted = Settings.canDrawOverlays(context)
 
-            if (overlayGranted) Log.i(TAG, "permission=overlay already_granted=true")
-            if (paired) Log.i(TAG, "bootstrap hasPairing=true host=${prefs.host} syncEnabled=${prefs.syncEnabled}")
-            else Log.i(TAG, "bootstrap hasPairing=false")
+            if (overlayGranted) L.perm(M, "overlay already_granted=true")
+            if (paired) L.event(M, "bootstrap hasPairing=true host=${prefs.host} syncEnabled=${prefs.syncEnabled}")
+            else L.event(M, "bootstrap hasPairing=false")
 
             _state.value = _state.value.copy(
                 mode = prefs.mode,
@@ -68,6 +72,7 @@ class SettingsViewModel : ViewModel() {
                 overlayPermissionGranted = overlayGranted,
                 syncEnabled = prefs.syncEnabled,
                 autoSendEnabled = prefs.autoSendEnabled,
+                mediaPermissionGranted = hasMediaPermission(context),
                 hasPairing = paired,
                 pairedHost = prefs.host,
                 pairedPort = prefs.port,
@@ -91,17 +96,17 @@ class SettingsViewModel : ViewModel() {
                 }
             }
         } catch (t: Throwable) {
-            Log.e(TAG, "bootstrap failed reading prefs", t)
+            L.error(M, "bootstrap failed reading prefs", t)
         }
     }
 
     fun setMode(mode: String) {
-        Log.i(TAG, "action=setMode mode=$mode")
+        L.action(M, "setMode mode=$mode")
         _state.value = _state.value.copy(mode = mode)
     }
 
     fun setOverlayEnabled(context: Context, enabled: Boolean) {
-        Log.i(TAG, "action=setOverlayEnabled enabled=$enabled")
+        L.action(M, "setOverlayEnabled enabled=$enabled")
         val prefs = Prefs(context)
         prefs.overlayEnabled = enabled
         _state.value = _state.value.copy(overlayEnabled = enabled)
@@ -109,14 +114,14 @@ class SettingsViewModel : ViewModel() {
     }
 
     fun setAutoSendEnabled(context: Context, enabled: Boolean) {
-        Log.i(TAG, "action=setAutoSendEnabled enabled=$enabled")
+        L.action(M, "setAutoSendEnabled enabled=$enabled")
         val prefs = Prefs(context)
         prefs.autoSendEnabled = enabled
         _state.value = _state.value.copy(autoSendEnabled = enabled)
     }
 
     fun startSync(context: Context) {
-        Log.i(TAG, "action=startSync")
+        L.action(M, "startSync")
         val prefs = Prefs(context)
         prefs.syncEnabled = true
         val host = prefs.host ?: ""
@@ -125,7 +130,7 @@ class SettingsViewModel : ViewModel() {
     }
 
     fun stopSync(context: Context) {
-        Log.i(TAG, "action=stopSync")
+        L.action(M, "stopSync")
         val prefs = Prefs(context)
         prefs.syncEnabled = false
         _state.value = _state.value.copy(syncEnabled = false, status = ConnectionStatus.Disconnected)
@@ -133,7 +138,7 @@ class SettingsViewModel : ViewModel() {
     }
 
     fun unpair(context: Context) {
-        Log.i(TAG, "action=unpair host=${_state.value.pairedHost}")
+        L.action(M, "unpair host=${_state.value.pairedHost}")
         Prefs(context).clearPairing()
         ClipForegroundService.stop(context)
         _state.value = _state.value.copy(
@@ -153,12 +158,12 @@ class SettingsViewModel : ViewModel() {
             try {
                 nsd.discover().collect { d ->
                     val isNew = _state.value.discovered.none { it.name == d.name }
-                    if (isNew) Log.i(TAG, "discovery found name=${d.name} host=${d.host}:${d.port}")
+                    if (isNew) L.event(M, "discovery found name=${d.name} host=${d.host}:${d.port}")
                     val merged = (_state.value.discovered + d).distinctBy { it.name }
                     _state.value = _state.value.copy(discovered = merged)
                 }
             } catch (t: Throwable) {
-                Log.w(TAG, "discovery crashed: ${t.message}")
+                L.warn(M, "discovery crashed: ${t.message}")
             }
         }
     }
@@ -168,7 +173,7 @@ class SettingsViewModel : ViewModel() {
             is PairingTarget.Auto -> "${target.discovered.host}:${target.discovered.port}"
             is PairingTarget.Manual -> "${target.host}:${target.port}"
         }
-        Log.i(TAG, "action=pair target=$targetLabel")
+        L.action(M, "pair target=$targetLabel")
         viewModelScope.launch {
             _state.value = _state.value.copy(status = ConnectionStatus.Connecting, error = null)
             try {
@@ -180,7 +185,6 @@ class SettingsViewModel : ViewModel() {
                         val d = target.discovered
                         val fp = d.fp
                         if (fp.isNullOrEmpty()) {
-                            // mDNS did not provide fp — fall back to TOFU.
                             val resp = withContext(Dispatchers.IO) {
                                 api.pairWithTofu(d.host, d.port, code)
                             }
@@ -200,7 +204,7 @@ class SettingsViewModel : ViewModel() {
                     }
                 }
             } catch (t: Throwable) {
-                Log.e(TAG, "pair failed", t)
+                L.error(M, "pair failed", t)
                 _state.value = _state.value.copy(
                     status = ConnectionStatus.Error(t.message ?: "unknown"),
                     error = t.message
@@ -219,7 +223,7 @@ class SettingsViewModel : ViewModel() {
         pairingSecret: String,
         mode: String
     ) {
-        Log.i(TAG, "action=pairSuccess host=$host port=$port mode=$mode")
+        L.action(M, "pairSuccess host=$host port=$port mode=$mode")
         prefs.host = host
         prefs.port = port
         prefs.token = token
@@ -257,26 +261,44 @@ class SettingsViewModel : ViewModel() {
             "ready"
         }
         val prev = _state.value.shizukuState
-        if (state != prev) Log.i(TAG, "permission=shizuku state=$state prev=$prev")
+        if (state != prev) L.perm(M, "shizuku state=$state prev=$prev")
         _state.value = _state.value.copy(shizukuState = state)
     }
 
     fun refreshOnResume(context: Context) {
         val overlayGranted = Settings.canDrawOverlays(context)
         if (overlayGranted != _state.value.overlayPermissionGranted) {
-            Log.i(TAG, "action=overlayPermissionChanged granted=$overlayGranted")
+            L.perm(M, "overlayPermissionChanged granted=$overlayGranted")
         }
-        _state.value = _state.value.copy(overlayPermissionGranted = overlayGranted)
+        val mediaGranted = hasMediaPermission(context)
+        _state.value = _state.value.copy(
+            overlayPermissionGranted = overlayGranted,
+            mediaPermissionGranted = mediaGranted
+        )
         refreshShizukuState(context)
     }
 
+    fun onMediaPermissionResult(granted: Boolean) {
+        _state.value = _state.value.copy(mediaPermissionGranted = granted)
+    }
+
+    private fun hasMediaPermission(context: Context): Boolean {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            ContextCompat.checkSelfPermission(context, Manifest.permission.READ_MEDIA_IMAGES) ==
+                PackageManager.PERMISSION_GRANTED
+        } else {
+            ContextCompat.checkSelfPermission(context, Manifest.permission.READ_EXTERNAL_STORAGE) ==
+                PackageManager.PERMISSION_GRANTED
+        }
+    }
+
     fun stopShizukuListener(context: Context) {
-        Log.i(TAG, "action=stopShizukuListener")
+        L.action(M, "stopShizukuListener")
         val i = Intent(context, ClipForegroundService::class.java).apply {
             action = ClipForegroundService.ACTION_STOP_SHIZUKU
         }
         try {
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(i)
             } else {
                 context.startService(i)
@@ -286,14 +308,14 @@ class SettingsViewModel : ViewModel() {
     }
 
     fun requestShizukuPermission() {
-        Log.i(TAG, "action=requestShizukuPermission")
+        L.action(M, "requestShizukuPermission")
         try {
             if (!Shizuku.pingBinder()) return
             val listener = object : Shizuku.OnRequestPermissionResultListener {
                 override fun onRequestPermissionResult(requestCode: Int, grantResult: Int) {
                     if (requestCode == ShizukuClipboardManager.PERMISSION_REQUEST_CODE) {
-                        val granted = grantResult == android.content.pm.PackageManager.PERMISSION_GRANTED
-                        Log.i(TAG, "action=shizukuPermissionResult granted=$granted")
+                        val granted = grantResult == PackageManager.PERMISSION_GRANTED
+                        L.perm(M, "shizukuPermissionResult granted=$granted")
                         _state.value = _state.value.copy(
                             shizukuState = if (granted) "ready" else "no_permission"
                         )
@@ -304,11 +326,11 @@ class SettingsViewModel : ViewModel() {
             Shizuku.addRequestPermissionResultListener(listener)
             Shizuku.requestPermission(ShizukuClipboardManager.PERMISSION_REQUEST_CODE)
         } catch (e: Exception) {
-            Log.w(TAG, "requestShizukuPermission failed: ${e.message}")
+            L.warn(M, "requestShizukuPermission failed: ${e.message}")
         }
     }
 
     companion object {
-        private const val TAG = "ClipSync/VM"
+        private const val M = "VM"
     }
 }

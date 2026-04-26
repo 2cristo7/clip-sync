@@ -7,7 +7,7 @@ import android.content.pm.PackageManager
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
-import android.util.Log
+import com.clipsync.util.L
 import rikka.shizuku.Shizuku
 
 /**
@@ -43,12 +43,12 @@ class ShizukuClipboardManager(private val context: Context) {
     // --- Shizuku listeners ---
 
     private val binderReceivedListener = Shizuku.OnBinderReceivedListener {
-        Log.i(TAG, "Shizuku binder received")
+        L.event(M, "Shizuku binder received")
         checkPermissionAndBind()
     }
 
     private val binderDeadListener = Shizuku.OnBinderDeadListener {
-        Log.w(TAG, "Shizuku binder dead")
+        L.warn(M, "Shizuku binder dead")
         userService = null
         updateState(State.NOT_RUNNING)
     }
@@ -72,14 +72,14 @@ class ShizukuClipboardManager(private val context: Context) {
                 userService = IClipUserService.Stub.asInterface(binder)
                 reconnectAttempts = 0
                 updateState(State.READY)
-                Log.i(TAG, "UserService connected")
+                L.event(M, "UserService connected")
             }
         }
 
         override fun onServiceDisconnected(name: ComponentName) {
             userService = null
             updateState(State.DEAD)
-            Log.w(TAG, "UserService disconnected")
+            L.warn(M, "UserService disconnected")
             scheduleReconnect()
         }
     }
@@ -164,7 +164,7 @@ class ShizukuClipboardManager(private val context: Context) {
         try {
             Shizuku.bindUserService(buildServiceArgs(), serviceConnection)
         } catch (e: Exception) {
-            Log.e(TAG, "bindUserService failed: ${e.message}")
+            L.error(M, "bindUserService failed: ${e.message}")
             updateState(State.NOT_RUNNING)
         }
     }
@@ -202,7 +202,7 @@ class ShizukuClipboardManager(private val context: Context) {
     }
 
     companion object {
-        private const val TAG = "ClipSync/Shizuku"
+        private const val M = "Shizuku"
         const val PERMISSION_REQUEST_CODE = 7777
         private const val MAX_RECONNECT = 5
         private const val RECONNECT_DELAY_MS = 2_000L

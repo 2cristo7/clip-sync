@@ -5,7 +5,7 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
-import android.util.Log
+import com.clipsync.util.L
 
 /**
  * Observes connectivity changes via [ConnectivityManager.NetworkCallback]
@@ -43,20 +43,20 @@ class NetworkChangeObserver(
             override fun onAvailable(network: Network) {
                 val prev = currentNetwork
                 currentNetwork = network
-                Log.i(TAG, "Network available: $network (prev=$prev)")
+                L.event(M, "Network available: $network (prev=$prev)")
                 if (prev != null && prev != network) {
                     // Switched to a different network (e.g. Wi-Fi → mobile)
-                    Log.i(TAG, "Network switched, triggering reconnect")
+                    L.event(M, "Network switched, triggering reconnect")
                     onReconnectNeeded()
                 } else if (prev == null) {
                     // Went from no-network to having a network
-                    Log.i(TAG, "Network restored, triggering reconnect")
+                    L.event(M, "Network restored, triggering reconnect")
                     onReconnectNeeded()
                 }
             }
 
             override fun onLost(network: Network) {
-                Log.i(TAG, "Network lost: $network")
+                L.event(M, "Network lost: $network")
                 if (currentNetwork == network) {
                     currentNetwork = null
                 }
@@ -66,13 +66,13 @@ class NetworkChangeObserver(
                 network: Network,
                 caps: NetworkCapabilities
             ) {
-                Log.d(TAG, "Capabilities changed: $network validated=${caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)}")
+                L.verbose(M, "Capabilities changed: $network validated=${caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)}")
             }
         }
         cm.registerNetworkCallback(request, cb)
         callback = cb
         registered = true
-        Log.i(TAG, "NetworkChangeObserver registered")
+        L.event(M, "NetworkChangeObserver registered")
     }
 
     /**
@@ -90,10 +90,10 @@ class NetworkChangeObserver(
         callback = null
         currentNetwork = null
         registered = false
-        Log.i(TAG, "NetworkChangeObserver unregistered")
+        L.event(M, "NetworkChangeObserver unregistered")
     }
 
     companion object {
-        private const val TAG = "ClipSync"
+        private const val M = "Net"
     }
 }

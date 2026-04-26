@@ -4,7 +4,7 @@ import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.os.Build
-import android.util.Log
+import com.clipsync.util.L
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -42,41 +42,41 @@ class NsdDiscovery(context: Context) {
                     name = info.serviceName ?: "",
                     version = parsed["version"]
                 )
-                Log.i(TAG, "Resolved $d")
+                L.event(M, "Resolved $d")
                 trySend(d)
             }
 
             override fun onResolveFailed(info: NsdServiceInfo, errorCode: Int) {
-                Log.w(TAG, "Resolve failed for ${info.serviceName}: $errorCode")
+                L.warn(M, "Resolve failed for ${info.serviceName}: $errorCode")
             }
         }
 
         val discoveryListener = object : NsdManager.DiscoveryListener {
             override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
-                Log.e(TAG, "Start discovery failed: $errorCode")
+                L.error(M, "Start discovery failed: $errorCode")
                 close()
             }
 
             override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {
-                Log.w(TAG, "Stop discovery failed: $errorCode")
+                L.warn(M, "Stop discovery failed: $errorCode")
             }
 
             override fun onDiscoveryStarted(serviceType: String) {
-                Log.i(TAG, "Discovery started for $serviceType")
+                L.event(M, "Discovery started for $serviceType")
             }
 
             override fun onDiscoveryStopped(serviceType: String) {
-                Log.i(TAG, "Discovery stopped")
+                L.event(M, "Discovery stopped")
             }
 
             override fun onServiceFound(info: NsdServiceInfo) {
-                Log.i(TAG, "Found ${info.serviceName} / ${info.serviceType}")
+                L.event(M, "Found ${info.serviceName} / ${info.serviceType}")
                 @Suppress("DEPRECATION")
                 nsd.resolveService(info, resolveListener)
             }
 
             override fun onServiceLost(info: NsdServiceInfo) {
-                Log.i(TAG, "Lost ${info.serviceName}")
+                L.event(M, "Lost ${info.serviceName}")
             }
         }
 
@@ -86,13 +86,13 @@ class NsdDiscovery(context: Context) {
             try {
                 nsd.stopServiceDiscovery(discoveryListener)
             } catch (t: Throwable) {
-                Log.w(TAG, "stopServiceDiscovery: ${t.message}")
+                L.warn(M, "stopServiceDiscovery: ${t.message}")
             }
         }
     }
 
     companion object {
-        private const val TAG = "ClipSync/NSD"
+        private const val M = "NSD"
         const val SERVICE_TYPE = "_clipsync._tcp."
 
         private fun resolveHost(addr: InetAddress): String = addr.hostAddress ?: addr.hostName ?: ""

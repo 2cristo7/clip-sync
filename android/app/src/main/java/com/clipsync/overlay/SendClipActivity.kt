@@ -7,7 +7,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
+import com.clipsync.util.L
 import android.view.View
 import android.widget.Toast
 import com.clipsync.model.ClipPayloadBuilder
@@ -172,7 +172,7 @@ class SendClipActivity : Activity() {
                     setPackage(packageName)
                     putExtra(EXTRA_SUCCESS, false)
                 })
-                Log.w(TAG, "Send failed: ${result.reason}")
+                L.warn(M, "Send failed: ${result.reason}")
             }
         }
         finish()
@@ -183,7 +183,7 @@ class SendClipActivity : Activity() {
     }
 
     companion object {
-        private const val TAG = "ClipSync/Send"
+        private const val M = "Send"
         const val ACTION_SEND_RESULT = "com.clipsync.action.SEND_RESULT"
         const val EXTRA_SUCCESS = "success"
         const val EXTRA_AUTO_SEND = "auto_send"

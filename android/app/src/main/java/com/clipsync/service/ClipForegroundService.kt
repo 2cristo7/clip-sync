@@ -10,7 +10,7 @@ import com.clipsync.net.NetworkChangeObserver
 import android.content.ClipboardManager
 import android.os.Build
 import android.os.IBinder
-import android.util.Log
+import com.clipsync.util.L
 import androidx.core.app.NotificationCompat
 import com.clipsync.app.R
 import com.clipsync.clipboard.ClipboardWriter
@@ -23,6 +23,7 @@ import com.clipsync.notifications.IncomingClipNotifier
 import com.clipsync.overlay.ClipOverlayManager
 import com.clipsync.overlay.ClipSender
 import com.clipsync.overlay.SendClipActivity
+import com.clipsync.screenshot.ScreenshotObserver
 import com.clipsync.shizuku.ShizukuClipboardManager
 import com.clipsync.storage.Prefs
 import okhttp3.WebSocket
@@ -53,6 +54,7 @@ class ClipForegroundService : Service() {
     private var networkObserver: NetworkChangeObserver? = null
     private var overlayManager: ClipOverlayManager? = null
     private var clipboardManager: ClipboardManager? = null
+    private var screenshotObserver: ScreenshotObserver? = null
     private var clipListenerRegistered = false
     private var clipListenerRegisteredAt = 0L   // grace period to suppress registration-fire
     private var lastAutoSendMs = 0L
@@ -69,39 +71,39 @@ class ClipForegroundService : Service() {
     }
 
     private val clipChangedListener = ClipboardManager.OnPrimaryClipChangedListener {
-        Log.d(TAG, ">> clipChangedListener fired")
+        L.verbose(M, "clipListener fired")
 
         // Some devices fire the listener immediately on registration.
         // Skip events within 1.5 s of registering to avoid sending stale clipboard.
         val now = System.currentTimeMillis()
         if (now - clipListenerRegisteredAt < 1_500) {
-            Log.d(TAG, "   skip: registration grace period")
+            L.verbose(M, "skip: registration grace period")
             return@OnPrimaryClipChangedListener
         }
 
         if (!prefs.autoSendEnabled) {
-            Log.d(TAG, "   skip: autoSendEnabled=false")
+            L.verbose(M, "skip: autoSendEnabled=false")
             return@OnPrimaryClipChangedListener
         }
         if (!prefs.syncEnabled) {
-            Log.d(TAG, "   skip: syncEnabled=false")
+            L.verbose(M, "skip: syncEnabled=false")
             return@OnPrimaryClipChangedListener
         }
 
         val echoAge = now - ClipboardWriter.lastMacWriteMs
         if (echoAge < 2_000) {
-            Log.d(TAG, "   skip: echo suppression (${echoAge}ms ago)")
+            L.verbose(M, "skip: echo suppression ${echoAge}ms")
             return@OnPrimaryClipChangedListener
         }
 
         val debounceAge = now - lastAutoSendMs
         if (debounceAge < 1_000) {
-            Log.d(TAG, "   skip: debounce (${debounceAge}ms ago)")
+            L.verbose(M, "skip: debounce ${debounceAge}ms")
             return@OnPrimaryClipChangedListener
         }
 
         lastAutoSendMs = now
-        Log.i(TAG, "   -> launching auto-send")
+        L.event(M, "auto-send launched")
         startActivity(SendClipActivity.intent(this).putExtra(SendClipActivity.EXTRA_AUTO_SEND, true))
     }
 
@@ -117,9 +119,9 @@ class ClipForegroundService : Service() {
         incomingNotifier.ensureChannel()
         try {
             val pruned = imageCache.cleanupOlderThan()
-            if (pruned > 0) Log.i(TAG, "Pruned $pruned stale cached image(s)")
+            if (pruned > 0) L.event(M, "pruned $pruned stale cached images")
         } catch (t: Throwable) {
-            Log.w(TAG, "ImageCache cleanup failed: ${t.message}")
+            L.warn(M, "ImageCache cleanup failed: ${t.message}")
         }
         startForeground(NOTIF_ID, buildNotification("Connecting..."))
         networkObserver = NetworkChangeObserver(this) {
@@ -132,10 +134,17 @@ class ClipForegroundService : Service() {
         clipboardManager = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         shizukuManager = ShizukuClipboardManager(this).also { mgr ->
             mgr.onStateChanged = { state ->
-                Log.i(TAG, "Shizuku state: $state")
+                L.event(M, "shizuku state=$state")
                 handler.post { onShizukuStateChanged(state) }
             }
             mgr.initialize()
+        }
+        screenshotObserver = ScreenshotObserver(this, handler) { _, mime, bytes ->
+            if (!prefs.autoSendEnabled || !prefs.syncEnabled) return@ScreenshotObserver
+            L.event(M, "screenshot auto-send mime=$mime bytes=${bytes.size}")
+            broadcastLoading(show = true)
+            val payload = ClipPayloadBuilder.image(mime, bytes)
+            sendPayloadToMac(payload)
         }
     }
 
@@ -151,12 +160,12 @@ class ClipForegroundService : Service() {
                 stopShizukuPolling()
                 shizukuManager?.destroy()
                 shizukuManager = null
-                Log.i(TAG, "Shizuku listener stopped by user")
+                L.action(M, "shizuku listener stopped")
             }
             return START_STICKY
         }
         if (!prefs.hasPairing()) {
-            Log.w(TAG, "No pairing stored, stopping service")
+            L.warn(M, "No pairing stored, stopping service")
             stopSelf()
             return START_NOT_STICKY
         }
@@ -165,6 +174,8 @@ class ClipForegroundService : Service() {
     }
 
     override fun onDestroy() {
+        screenshotObserver?.unregister()
+        screenshotObserver = null
         networkObserver?.unregister()
         networkObserver = null
         overlayManager?.destroy()
@@ -204,31 +215,34 @@ class ClipForegroundService : Service() {
                 when (status) {
                     is ClipClient.WsStatus.Open -> {
                         backoffMs = INITIAL_BACKOFF_MS
-                        Log.i(TAG, "ws=connected host=$host")
+                        L.event("WS", "connected host=$host")
                         updateNotification("Connected ($host)")
                         handler.post {
                             if (prefs.overlayEnabled) overlayManager?.showFab()
                             registerClipListener()
                             if (shizukuManager?.isAvailable() == true) startShizukuPolling()
+                            screenshotObserver?.register()
                         }
                     }
                     is ClipClient.WsStatus.Closed -> {
-                        Log.i(TAG, "ws=closed host=$host code=${status.code}")
+                        L.event("WS", "closed host=$host code=${status.code}")
                         updateNotification("Disconnected")
                         handler.post {
                             overlayManager?.dismiss()
                             unregisterClipListener()
                             stopShizukuPolling()
+                            screenshotObserver?.unregister()
                         }
                         scheduleReconnect()
                     }
                     is ClipClient.WsStatus.Error -> {
-                        Log.w(TAG, "ws=error host=$host msg=${status.message}")
+                        L.warn("WS", "error host=$host msg=${status.message}")
                         updateNotification("Error: ${status.message}")
                         handler.post {
                             overlayManager?.dismiss()
                             unregisterClipListener()
                             stopShizukuPolling()
+                            screenshotObserver?.unregister()
                         }
                         scheduleReconnect()
                     }
@@ -237,7 +251,7 @@ class ClipForegroundService : Service() {
     }
 
     private fun onFrame(payload: ClipPayload) {
-        Log.i(TAG, "frame type=${payload.type} mime=${payload.mime} bytes=${payload.data.length} ts=${payload.ts}")
+        L.event(M, "frame type=${payload.type} mime=${payload.mime} bytes=${payload.data.length}")
 
         // Tier 1: Write text directly via Shizuku (no ApplyClipActivity trampoline)
         if (payload.type == "text" && shizukuManager?.isAvailable() == true) {
@@ -245,10 +259,10 @@ class ClipForegroundService : Service() {
             ClipboardWriter.lastMacWriteMs = System.currentTimeMillis()
             shizukuManager?.setClipboardText(text)
             lastShizukuHash = text.hashCode()
-            Log.i(TAG, "Wrote text to clipboard via Shizuku (${text.length} chars)")
+            L.event(M, "clipboard write via shizuku chars=${text.length}")
             // Still show notification for visual feedback
             try { incomingNotifier.notify(payload) } catch (t: Throwable) {
-                Log.w(TAG, "notify failed: ${t.message}")
+                L.warn(M, "notify failed: ${t.message}")
             }
             return
         }
@@ -269,14 +283,14 @@ class ClipForegroundService : Service() {
                         this, uri, payload.mime, payload.nonce
                     )
                 )
-                Log.i(TAG, "Launching ApplyClipActivity for image (${bytes.size} bytes)")
+                L.event(M, "launching ApplyClipActivity bytes=${bytes.size}")
             } catch (t: Throwable) {
-                Log.w(TAG, "Image clipboard write failed: ${t.message}")
+                L.warn(M, "Image clipboard write failed: ${t.message}")
                 broadcastLoading(show = false, success = false)
             }
             // Still show notification for visual feedback
             try { incomingNotifier.notify(payload) } catch (t: Throwable) {
-                Log.w(TAG, "notify failed: ${t.message}")
+                L.warn(M, "notify failed: ${t.message}")
             }
             return
         }
@@ -285,7 +299,7 @@ class ClipForegroundService : Service() {
         try {
             incomingNotifier.notify(payload)
         } catch (t: Throwable) {
-            Log.w(TAG, "notify failed: ${t.message}")
+            L.warn(M, "notify failed: ${t.message}")
         }
     }
 
@@ -294,21 +308,21 @@ class ClipForegroundService : Service() {
         clipListenerRegisteredAt = System.currentTimeMillis()
         clipboardManager?.addPrimaryClipChangedListener(clipChangedListener)
         clipListenerRegistered = true
-        Log.i(TAG, "Clipboard listener REGISTERED")
+        L.event(M, "clipboard listener registered")
     }
 
     private fun unregisterClipListener() {
         if (!clipListenerRegistered) return
         clipboardManager?.removePrimaryClipChangedListener(clipChangedListener)
         clipListenerRegistered = false
-        Log.i(TAG, "Clipboard listener UNREGISTERED")
+        L.event(M, "clipboard listener unregistered")
     }
 
     private fun scheduleReconnect() {
         handler.removeCallbacks(reconnectRunnable)
         val delay = backoffMs
         backoffMs = min(backoffMs * 2, MAX_BACKOFF_MS)
-        Log.i(TAG, "Reconnect in ${delay}ms")
+        L.event(M, "reconnect in ${delay}ms")
         handler.postDelayed(reconnectRunnable, delay)
     }
 
@@ -357,7 +371,7 @@ class ClipForegroundService : Service() {
         if (!shizukuHashSeeded) {
             lastShizukuHash = hash
             shizukuHashSeeded = true
-            Log.d(TAG, "Shizuku hash seeded: $hash")
+            L.verbose(M, "shizuku hash seeded=$hash")
             return
         }
 
@@ -376,35 +390,39 @@ class ClipForegroundService : Service() {
         val mime = mgr.getClipboardMime()
         if (mime != null && mime.startsWith("text")) {
             val text = mgr.getClipboardText() ?: return
-            Log.i(TAG, "Shizuku auto-send text (${text.length} chars)")
+            L.event(M, "shizuku auto-send text chars=${text.length}")
             sendTextToMac(text)
         } else if (mime != null && mime.startsWith("image")) {
             // Image clips: use the trampoline Activity which has proper clipboard
             // access and gets temporary URI read permission from the system.
             // Direct URI reading from a Service fails because the clipboard URI
             // grant was given to the Shizuku process, not our app process.
-            Log.i(TAG, "Shizuku detected image clip ($mime), launching trampoline")
+            L.event(M, "shizuku image clip detected mime=$mime")
             broadcastLoading(show = true)
             startActivity(
                 SendClipActivity.intent(this)
                     .putExtra(SendClipActivity.EXTRA_AUTO_SEND, true)
             )
         } else {
-            Log.i(TAG, "Shizuku detected unsupported clip ($mime), skipping")
+            L.verbose(M, "shizuku unsupported clip mime=$mime")
         }
     }
 
     private fun sendTextToMac(text: String) {
+        sendPayloadToMac(ClipPayloadBuilder.text(text))
+    }
+
+    private fun sendPayloadToMac(payload: ClipPayload) {
         val host = prefs.host ?: return
         val port = prefs.port
         val token = prefs.token ?: return
         val secret = prefs.pairingSecret ?: return
         val fp = prefs.fp ?: return
-        val payload = ClipPayloadBuilder.text(text)
         val sender = ClipSender(client)
         Thread {
             val result = sender.send(host, port, token, secret, fp, payload)
-            Log.i(TAG, "Shizuku auto-send result: $result")
+            L.event(M, "auto-send result=$result type=${payload.type}")
+            handler.post { broadcastLoading(show = false, success = result is ClipSender.Result.Ok) }
         }.start()
     }
 
@@ -422,13 +440,13 @@ class ClipForegroundService : Service() {
         shizukuHashSeeded = false
         lastShizukuHash = 0
         handler.post(shizukuPollRunnable)
-        Log.i(TAG, "Shizuku polling STARTED")
+        L.event(M, "shizuku polling started")
     }
 
     private fun stopShizukuPolling() {
         handler.removeCallbacks(shizukuPollRunnable)
         shizukuHashSeeded = false
-        Log.i(TAG, "Shizuku polling STOPPED")
+        L.event(M, "shizuku polling stopped")
     }
 
     private fun onShizukuStateChanged(state: ShizukuClipboardManager.State) {
@@ -441,7 +459,7 @@ class ClipForegroundService : Service() {
     }
 
     companion object {
-        private const val TAG = "ClipSync"
+        private const val M = "SVC"
         private const val CHANNEL_ID = "clipsync_sync"
         private const val NOTIF_ID = 4242
         private const val INITIAL_BACKOFF_MS = 1_000L

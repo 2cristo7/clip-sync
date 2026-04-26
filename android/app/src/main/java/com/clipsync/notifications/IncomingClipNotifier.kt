@@ -12,7 +12,7 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import android.util.Base64
-import android.util.Log
+import com.clipsync.util.L
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -60,21 +60,21 @@ class IncomingClipNotifier(
     fun notify(payload: ClipPayload) {
         ensureChannel()
         if (!hasPostNotifPermission()) {
-            Log.w(TAG, "POST_NOTIFICATIONS revoked — skipping notification")
+            L.warn(M, "POST_NOTIFICATIONS revoked — skipping notification")
             return
         }
         val builder = when (payload.type) {
             "text" -> buildTextNotification(payload)
             "image" -> buildImageNotification(payload)
             else -> {
-                Log.w(TAG, "Unknown payload type: ${payload.type}")
+                L.warn(M, "Unknown payload type: ${payload.type}")
                 return
             }
         }
         try {
             NotificationManagerCompat.from(context).notify(notifIdFor(payload), builder.build())
         } catch (sec: SecurityException) {
-            Log.w(TAG, "SecurityException posting notification: ${sec.message}")
+            L.warn(M, "SecurityException posting notification: ${sec.message}")
         }
     }
 
@@ -105,7 +105,7 @@ class IncomingClipNotifier(
         val bitmap: Bitmap? = try {
             BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
         } catch (t: Throwable) {
-            Log.w(TAG, "decodeByteArray failed: ${t.message}")
+            L.warn(M, "decodeByteArray failed: ${t.message}")
             null
         }
         val intent = ApplyClipActivity.imageIntent(context, uri, payload.mime, payload.nonce)
@@ -157,7 +157,7 @@ class IncomingClipNotifier(
 
     companion object {
         const val CHANNEL_ID = "clipsync_incoming"
-        private const val TAG = "ClipSync"
+        private const val M = "Notif"
         private const val PREVIEW_MAX = 120
 
         internal fun previewOf(text: String): String {
@@ -179,6 +179,7 @@ class IncomingClipNotifier(
             "image/jpeg", "image/jpg" -> "jpg"
             "image/webp" -> "webp"
             "image/gif" -> "gif"
+            "image/tiff" -> "tiff"
             else -> "bin"
         }
     }
