@@ -6,34 +6,48 @@ import android.os.Build
 import android.provider.Settings
 import android.text.TextUtils
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -58,7 +72,11 @@ import com.clipsync.ui.theme.NeuSegmentedToggle
 import com.clipsync.ui.theme.NeuStatusBadge
 
 @Composable
-fun SettingsScreen(vm: SettingsViewModel = viewModel()) {
+fun SettingsScreen(
+    isDark: Boolean = true,
+    onToggleTheme: () -> Unit = {},
+    vm: SettingsViewModel = viewModel(),
+) {
     val context = LocalContext.current
     val state by vm.state.collectAsState()
     var pairingTarget by remember { mutableStateOf<PairingTarget?>(null) }
@@ -67,10 +85,20 @@ fun SettingsScreen(vm: SettingsViewModel = viewModel()) {
 
     LaunchedEffect(Unit) { vm.bootstrap(context) }
 
+    val lifecycleOwner = context as? androidx.lifecycle.LifecycleOwner
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) vm.refreshOnResume(context)
+        }
+        lifecycleOwner?.lifecycle?.addObserver(observer)
+        onDispose { lifecycleOwner?.lifecycle?.removeObserver(observer) }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(NeuColors.Background)
+            .windowInsetsPadding(WindowInsets.safeDrawing)
     ) {
         Column(
             modifier = Modifier
@@ -80,12 +108,33 @@ fun SettingsScreen(vm: SettingsViewModel = viewModel()) {
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Header
+            Spacer(Modifier.height(2.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    "ClipSync",
+                    style = MaterialTheme.typography.headlineLarge,
+                    fontWeight = FontWeight.Bold,
+                )
+                IconButton(
+                    onClick = onToggleTheme,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(NeuColors.SurfaceRaised)
+                ) {
+                    Icon(
+                        imageVector = if (isDark) Icons.Filled.LightMode else Icons.Filled.DarkMode,
+                        contentDescription = if (isDark) "Light mode" else "Dark mode",
+                        tint = NeuColors.Accent,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            }
             Spacer(Modifier.height(8.dp))
-            Text(
-                "ClipSync",
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.Bold,
-            )
 
             // Status card
             NeuCard {
@@ -149,8 +198,8 @@ fun SettingsScreen(vm: SettingsViewModel = viewModel()) {
             // Discovery / Manual section
             AnimatedVisibility(
                 visible = state.mode == Prefs.MODE_AUTO,
-                enter = fadeIn() + slideInVertically(),
-                exit = fadeOut() + slideOutVertically()
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     NeuSectionHeader("Discovered Servers")
@@ -168,10 +217,14 @@ fun SettingsScreen(vm: SettingsViewModel = viewModel()) {
                     } else {
                         state.discovered.forEach { d ->
                             val isPaired = d.host == state.pairedHost && d.port == state.pairedPort
+                            val isActive = state.status is ConnectionStatus.Connected ||
+                                state.status is ConnectionStatus.Connecting
                             DiscoveredServerCard(
                                 d = d,
                                 isPaired = isPaired,
-                                onPair = { if (!isPaired) pairingTarget = PairingTarget.Auto(d) }
+                                canUnpair = isPaired && !isActive,
+                                onPair = { if (!isPaired) pairingTarget = PairingTarget.Auto(d) },
+                                onUnpair = { vm.unpair(context) }
                             )
                         }
                     }
@@ -180,8 +233,8 @@ fun SettingsScreen(vm: SettingsViewModel = viewModel()) {
 
             AnimatedVisibility(
                 visible = state.mode == Prefs.MODE_MANUAL,
-                enter = fadeIn() + slideInVertically(),
-                exit = fadeOut() + slideOutVertically()
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     NeuSectionHeader("Manual Connection")
@@ -295,7 +348,7 @@ fun SettingsScreen(vm: SettingsViewModel = viewModel()) {
                             )
                         )
                     }
-                    if (state.overlayEnabled && !Settings.canDrawOverlays(context)) {
+                    if (state.overlayEnabled && !state.overlayPermissionGranted) {
                         NeuButton(
                             onClick = {
                                 val intent = Intent(
@@ -438,7 +491,13 @@ private fun statusSubtitle(status: ConnectionStatus, hasPairing: Boolean = false
 }
 
 @Composable
-private fun DiscoveredServerCard(d: Discovered, isPaired: Boolean, onPair: () -> Unit) {
+private fun DiscoveredServerCard(
+    d: Discovered,
+    isPaired: Boolean,
+    canUnpair: Boolean,
+    onPair: () -> Unit,
+    onUnpair: () -> Unit,
+) {
     NeuCard {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -452,11 +511,19 @@ private fun DiscoveredServerCard(d: Discovered, isPaired: Boolean, onPair: () ->
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
-            if (isPaired) {
-                NeuStatusBadge(label = "Connected", color = NeuColors.Connected)
-            } else {
-                NeuButton(onClick = onPair, isAccent = true) {
-                    Text("Pair", color = NeuColors.TextOnAccent)
+            when {
+                canUnpair -> {
+                    NeuButton(onClick = onUnpair, isAccent = false) {
+                        Text("Unpair", color = NeuColors.Error)
+                    }
+                }
+                isPaired -> {
+                    NeuStatusBadge(label = "Connected", color = NeuColors.Connected)
+                }
+                else -> {
+                    NeuButton(onClick = onPair, isAccent = true) {
+                        Text("Pair", color = NeuColors.TextOnAccent)
+                    }
                 }
             }
         }
@@ -495,6 +562,7 @@ private fun PairingCodeDialog(
                     onValueChange = { code = it.filter { c -> c.isDigit() }.take(6) },
                     label = { Text("6-digit code") },
                     singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                     textStyle = MaterialTheme.typography.headlineMedium.copy(
                         letterSpacing = 8.sp,
                         fontWeight = FontWeight.Bold,

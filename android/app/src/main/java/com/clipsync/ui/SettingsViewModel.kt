@@ -11,6 +11,7 @@ import com.clipsync.net.PairingApi
 import android.content.Intent
 import com.clipsync.service.ClipForegroundService
 import com.clipsync.shizuku.ShizukuClipboardManager
+import android.provider.Settings
 import com.clipsync.storage.Prefs
 import rikka.shizuku.Shizuku
 import kotlinx.coroutines.Dispatchers
@@ -37,6 +38,7 @@ data class SettingsState(
     val pairedHost: String? = null,
     val pairedPort: Int = 7010,
     val overlayEnabled: Boolean = true,
+    val overlayPermissionGranted: Boolean = false,
     val syncEnabled: Boolean = true,
     val autoSendEnabled: Boolean = true,
     val shizukuState: String = "not_checked",
@@ -58,6 +60,7 @@ class SettingsViewModel : ViewModel() {
             _state.value = _state.value.copy(
                 mode = prefs.mode,
                 overlayEnabled = prefs.overlayEnabled,
+                overlayPermissionGranted = Settings.canDrawOverlays(context),
                 syncEnabled = prefs.syncEnabled,
                 autoSendEnabled = prefs.autoSendEnabled,
                 hasPairing = paired,
@@ -88,10 +91,12 @@ class SettingsViewModel : ViewModel() {
     }
 
     fun setMode(mode: String) {
+        Log.i(TAG, "action=setMode mode=$mode")
         _state.value = _state.value.copy(mode = mode)
     }
 
     fun setOverlayEnabled(context: Context, enabled: Boolean) {
+        Log.i(TAG, "action=setOverlayEnabled enabled=$enabled")
         val prefs = Prefs(context)
         prefs.overlayEnabled = enabled
         _state.value = _state.value.copy(overlayEnabled = enabled)
@@ -99,12 +104,14 @@ class SettingsViewModel : ViewModel() {
     }
 
     fun setAutoSendEnabled(context: Context, enabled: Boolean) {
+        Log.i(TAG, "action=setAutoSendEnabled enabled=$enabled")
         val prefs = Prefs(context)
         prefs.autoSendEnabled = enabled
         _state.value = _state.value.copy(autoSendEnabled = enabled)
     }
 
     fun startSync(context: Context) {
+        Log.i(TAG, "action=startSync")
         val prefs = Prefs(context)
         prefs.syncEnabled = true
         val host = prefs.host ?: ""
@@ -113,10 +120,25 @@ class SettingsViewModel : ViewModel() {
     }
 
     fun stopSync(context: Context) {
+        Log.i(TAG, "action=stopSync")
         val prefs = Prefs(context)
         prefs.syncEnabled = false
         _state.value = _state.value.copy(syncEnabled = false, status = ConnectionStatus.Disconnected)
         ClipForegroundService.stop(context)
+    }
+
+    fun unpair(context: Context) {
+        Log.i(TAG, "action=unpair host=${_state.value.pairedHost}")
+        Prefs(context).clearPairing()
+        ClipForegroundService.stop(context)
+        _state.value = _state.value.copy(
+            hasPairing = false,
+            pairedHost = null,
+            pairedPort = 7010,
+            syncEnabled = false,
+            status = ConnectionStatus.Disconnected,
+            error = null
+        )
     }
 
     fun startDiscovery(context: Context) {
@@ -135,6 +157,11 @@ class SettingsViewModel : ViewModel() {
     }
 
     fun pair(context: Context, target: PairingTarget, code: String) {
+        val targetLabel = when (target) {
+            is PairingTarget.Auto -> "${target.discovered.host}:${target.discovered.port}"
+            is PairingTarget.Manual -> "${target.host}:${target.port}"
+        }
+        Log.i(TAG, "action=pair target=$targetLabel")
         viewModelScope.launch {
             _state.value = _state.value.copy(status = ConnectionStatus.Connecting, error = null)
             try {
@@ -185,6 +212,7 @@ class SettingsViewModel : ViewModel() {
         pairingSecret: String,
         mode: String
     ) {
+        Log.i(TAG, "action=pairSuccess host=$host port=$port mode=$mode")
         prefs.host = host
         prefs.port = port
         prefs.token = token
@@ -224,7 +252,17 @@ class SettingsViewModel : ViewModel() {
         _state.value = _state.value.copy(shizukuState = state)
     }
 
+    fun refreshOnResume(context: Context) {
+        val overlayGranted = Settings.canDrawOverlays(context)
+        if (overlayGranted != _state.value.overlayPermissionGranted) {
+            Log.i(TAG, "action=overlayPermissionChanged granted=$overlayGranted")
+        }
+        _state.value = _state.value.copy(overlayPermissionGranted = overlayGranted)
+        refreshShizukuState(context)
+    }
+
     fun stopShizukuListener(context: Context) {
+        Log.i(TAG, "action=stopShizukuListener")
         val i = Intent(context, ClipForegroundService::class.java).apply {
             action = ClipForegroundService.ACTION_STOP_SHIZUKU
         }
@@ -239,14 +277,16 @@ class SettingsViewModel : ViewModel() {
     }
 
     fun requestShizukuPermission() {
+        Log.i(TAG, "action=requestShizukuPermission")
         try {
             if (!Shizuku.pingBinder()) return
             val listener = object : Shizuku.OnRequestPermissionResultListener {
                 override fun onRequestPermissionResult(requestCode: Int, grantResult: Int) {
                     if (requestCode == ShizukuClipboardManager.PERMISSION_REQUEST_CODE) {
+                        val granted = grantResult == android.content.pm.PackageManager.PERMISSION_GRANTED
+                        Log.i(TAG, "action=shizukuPermissionResult granted=$granted")
                         _state.value = _state.value.copy(
-                            shizukuState = if (grantResult == android.content.pm.PackageManager.PERMISSION_GRANTED)
-                                "ready" else "no_permission"
+                            shizukuState = if (granted) "ready" else "no_permission"
                         )
                         Shizuku.removeRequestPermissionResultListener(this)
                     }
