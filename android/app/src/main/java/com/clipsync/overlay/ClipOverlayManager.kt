@@ -20,6 +20,7 @@ import android.util.Log
 import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
+import android.view.animation.LinearInterpolator
 import android.view.animation.OvershootInterpolator
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -43,13 +44,23 @@ class ClipOverlayManager(private val context: Context) {
     private val wm = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     private val handler = Handler(Looper.getMainLooper())
 
+    private var spinnerView: View? = null
+    private var isLoading = false
+
     private val resultReceiver = object : BroadcastReceiver() {
         override fun onReceive(ctx: Context?, intent: Intent?) {
-            val success = intent?.getBooleanExtra(SendClipActivity.EXTRA_SUCCESS, false) ?: false
-            if (success) {
-                showSuccessFeedback()
-            } else {
-                showErrorFeedback()
+            when (intent?.action) {
+                SendClipActivity.ACTION_SEND_RESULT -> {
+                    val success = intent.getBooleanExtra(SendClipActivity.EXTRA_SUCCESS, false)
+                    hideLoading()
+                    if (success) showSuccessFeedback() else showErrorFeedback()
+                }
+                ACTION_SHOW_LOADING -> showLoading()
+                ACTION_HIDE_LOADING -> {
+                    val success = intent.getBooleanExtra(EXTRA_LOADING_SUCCESS, true)
+                    hideLoading()
+                    if (success) showSuccessFeedback() else showErrorFeedback()
+                }
             }
         }
     }
@@ -98,9 +109,13 @@ class ClipOverlayManager(private val context: Context) {
             return
         }
 
-        // Register for send results
+        // Register for send results and loading state
         if (!receiverRegistered) {
-            val filter = IntentFilter(SendClipActivity.ACTION_SEND_RESULT)
+            val filter = IntentFilter().apply {
+                addAction(SendClipActivity.ACTION_SEND_RESULT)
+                addAction(ACTION_SHOW_LOADING)
+                addAction(ACTION_HIDE_LOADING)
+            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 context.registerReceiver(resultReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
             } else {
@@ -149,7 +164,7 @@ class ClipOverlayManager(private val context: Context) {
     private fun showSuccessFeedback() {
         val view = fabView ?: return
         val icon = view.findViewWithTag<ImageView>("icon")
-        icon?.setColorFilter(Color.parseColor("#2ECC76"))
+        icon?.setColorFilter(Color.parseColor("#5AEAAA"))
         view.alpha = 1.0f
 
         handler.postDelayed({ 
@@ -164,10 +179,58 @@ class ClipOverlayManager(private val context: Context) {
         icon?.setColorFilter(Color.parseColor("#F44336"))
         view.alpha = 1.0f
 
-        handler.postDelayed({ 
+        handler.postDelayed({
             icon?.setColorFilter(Color.WHITE)
             view.animate().alpha(0.6f).setDuration(300).start()
         }, 1000)
+    }
+
+    private fun showLoading() {
+        val view = fabView ?: return
+        if (isLoading) return
+        isLoading = true
+        view.alpha = 1.0f
+
+        // Hide the icon
+        val icon = view.findViewWithTag<ImageView>("icon")
+        icon?.visibility = View.INVISIBLE
+
+        // Add spinning arc overlay
+        val container = view as? FrameLayout ?: return
+        val size = container.width
+        val spinner = SpinnerView(context, dpToPx(56))
+        spinner.tag = "spinner"
+        spinner.layoutParams = FrameLayout.LayoutParams(size, size)
+        container.addView(spinner)
+
+        // Start rotation animation
+        spinner.animate()
+            .rotationBy(360f * 100)  // many rotations
+            .setDuration(100 * 1000L)
+            .setInterpolator(LinearInterpolator())
+            .start()
+
+        // Safety timeout: auto-hide after 30s
+        handler.postDelayed({ hideLoading() }, 30_000)
+    }
+
+    private fun hideLoading() {
+        if (!isLoading) return
+        isLoading = false
+
+        val view = fabView ?: return
+        val container = view as? FrameLayout ?: return
+
+        // Remove spinner
+        val spinner = container.findViewWithTag<View>("spinner")
+        if (spinner != null) {
+            spinner.animate().cancel()
+            container.removeView(spinner)
+        }
+
+        // Restore icon
+        val icon = container.findViewWithTag<ImageView>("icon")
+        icon?.visibility = View.VISIBLE
     }
 
     private fun launchSendClipActivity() {
@@ -197,24 +260,24 @@ class ClipOverlayManager(private val context: Context) {
                 rect.set(inset, inset, w - inset, h - inset)
                 val radius = (w - 2 * inset) / 2f
 
-                // Outer shadow (clay feel)
-                shadowPaint.setShadowLayer(dpToPx(8).toFloat(), 0f, dpToPx(3).toFloat(), Color.parseColor("#401AAD5A"))
+                // Outer glow
+                shadowPaint.setShadowLayer(dpToPx(10).toFloat(), 0f, dpToPx(4).toFloat(), Color.parseColor("#505AEAAA"))
                 shadowPaint.color = Color.TRANSPARENT
                 canvas.drawOval(rect, shadowPaint)
 
-                // Main body gradient (mint green clay)
+                // Main body gradient
                 paint.shader = LinearGradient(
                     0f, 0f, 0f, h,
-                    Color.parseColor("#4BDD8A"),
-                    Color.parseColor("#1AAD5A"),
+                    Color.parseColor("#7DF2C0"),
+                    Color.parseColor("#38D690"),
                     Shader.TileMode.CLAMP
                 )
                 canvas.drawOval(rect, paint)
 
-                // Inner highlight (top) — simulates 3D lighting
+                // Inner highlight (top)
                 highlightPaint.shader = LinearGradient(
                     0f, inset, 0f, h * 0.5f,
-                    Color.parseColor("#40FFFFFF"),
+                    Color.parseColor("#50FFFFFF"),
                     Color.parseColor("#00FFFFFF"),
                     Shader.TileMode.CLAMP
                 )
@@ -258,7 +321,30 @@ class ClipOverlayManager(private val context: Context) {
         return (dp * context.resources.displayMetrics.density + 0.5f).toInt()
     }
 
+    /**
+     * Custom View that draws a spinning arc — used as loading indicator
+     * on the FAB when sending/receiving images.
+     */
+    private class SpinnerView(context: Context, private val sizePx: Int) : View(context) {
+        private val arcPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.WHITE
+            style = Paint.Style.STROKE
+            strokeWidth = sizePx * 0.06f  // ~3.4dp for 56dp FAB
+            strokeCap = Paint.Cap.ROUND
+        }
+        private val rect = RectF()
+
+        override fun onDraw(canvas: Canvas) {
+            val inset = sizePx * 0.18f  // inside the FAB circle
+            rect.set(inset, inset, width - inset, height - inset)
+            canvas.drawArc(rect, 0f, 270f, false, arcPaint)
+        }
+    }
+
     companion object {
         private const val TAG = "ClipSync/Overlay"
+        const val ACTION_SHOW_LOADING = "com.clipsync.action.SHOW_LOADING"
+        const val ACTION_HIDE_LOADING = "com.clipsync.action.HIDE_LOADING"
+        const val EXTRA_LOADING_SUCCESS = "loading_success"
     }
 }

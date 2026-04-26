@@ -108,21 +108,7 @@ class SendClipActivity : Activity() {
         val mimeType = clip.description?.getMimeType(0) ?: ""
 
         when {
-            mimeType.startsWith("text/") || item.text != null -> {
-                val text = item.coerceToText(this)?.toString()
-                if (text.isNullOrEmpty()) {
-                    toast("Empty clipboard")
-                    finish()
-                    return
-                }
-                val payload = ClipPayloadBuilder.text(text)
-                scope.launch {
-                    val result = withContext(Dispatchers.IO) {
-                        sender.send(host, port, token, secret, fp, payload)
-                    }
-                    handleResult(result)
-                }
-            }
+            // Check image MIME first — some clips have both URI and text
             mimeType.startsWith("image/") -> {
                 val uri = item.uri
                 if (uri == null) {
@@ -145,6 +131,21 @@ class SendClipActivity : Activity() {
                         } catch (t: Throwable) {
                             ClipSender.Result.Failed(t.message ?: "read error")
                         }
+                    }
+                    handleResult(result)
+                }
+            }
+            mimeType.startsWith("text/") || item.text != null -> {
+                val text = item.coerceToText(this)?.toString()
+                if (text.isNullOrEmpty()) {
+                    toast("Empty clipboard")
+                    finish()
+                    return
+                }
+                val payload = ClipPayloadBuilder.text(text)
+                scope.launch {
+                    val result = withContext(Dispatchers.IO) {
+                        sender.send(host, port, token, secret, fp, payload)
                     }
                     handleResult(result)
                 }

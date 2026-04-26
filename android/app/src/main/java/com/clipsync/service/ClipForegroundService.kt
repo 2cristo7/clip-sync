@@ -15,6 +15,7 @@ import androidx.core.app.NotificationCompat
 import com.clipsync.app.R
 import com.clipsync.clipboard.ClipboardWriter
 import com.clipsync.images.ImageCache
+import android.util.Base64
 import com.clipsync.model.ClipPayload
 import com.clipsync.model.ClipPayloadBuilder
 import com.clipsync.net.ClipClient
@@ -182,6 +183,10 @@ class ClipForegroundService : Service() {
         val fp = prefs.fp ?: return
         val host = prefs.host ?: return
         val port = prefs.port
+        // Cancel any existing WebSocket before opening a new one to prevent
+        // duplicate connections that cause every frame to be processed N times.
+        ws?.cancel()
+        ws = null
         updateNotification("Connecting to $host...")
         val okClient = client.pinnedClient(host, fp)
         ws = client.connectWebSocket(okClient, host, port, token,
@@ -236,7 +241,35 @@ class ClipForegroundService : Service() {
             return
         }
 
-        // Tier 2/3: Notification with ApplyClipActivity (images, or no Shizuku)
+        // Images: always use ApplyClipActivity trampoline. Shizuku setClipboardUri
+        // fails silently because UID 2000 (shell) cannot grant FileProvider URI
+        // permissions on the system clipboard.
+        if (payload.type == "image") {
+            broadcastLoading(show = true)
+            try {
+                val bytes = Base64.decode(payload.data, Base64.DEFAULT)
+                val ext = IncomingClipNotifier.extensionForMime(payload.mime)
+                val uri = imageCache.writeImage(bytes, ext)
+                ClipboardWriter.lastMacWriteMs = System.currentTimeMillis()
+                lastShizukuHash = uri.toString().hashCode()
+                startActivity(
+                    com.clipsync.notifications.ApplyClipActivity.imageIntent(
+                        this, uri, payload.mime, payload.nonce
+                    )
+                )
+                Log.i(TAG, "Launching ApplyClipActivity for image (${bytes.size} bytes)")
+            } catch (t: Throwable) {
+                Log.w(TAG, "Image clipboard write failed: ${t.message}")
+                broadcastLoading(show = false, success = false)
+            }
+            // Still show notification for visual feedback
+            try { incomingNotifier.notify(payload) } catch (t: Throwable) {
+                Log.w(TAG, "notify failed: ${t.message}")
+            }
+            return
+        }
+
+        // Tier 2/3: Notification with ApplyClipActivity (no Shizuku)
         try {
             incomingNotifier.notify(payload)
         } catch (t: Throwable) {
@@ -333,13 +366,19 @@ class ClipForegroundService : Service() {
             val text = mgr.getClipboardText() ?: return
             Log.i(TAG, "Shizuku auto-send text (${text.length} chars)")
             sendTextToMac(text)
-        } else {
-            // Image or other: fall back to trampoline Activity
-            Log.i(TAG, "Shizuku detected non-text clip ($mime), using trampoline")
+        } else if (mime != null && mime.startsWith("image")) {
+            // Image clips: use the trampoline Activity which has proper clipboard
+            // access and gets temporary URI read permission from the system.
+            // Direct URI reading from a Service fails because the clipboard URI
+            // grant was given to the Shizuku process, not our app process.
+            Log.i(TAG, "Shizuku detected image clip ($mime), launching trampoline")
+            broadcastLoading(show = true)
             startActivity(
                 SendClipActivity.intent(this)
                     .putExtra(SendClipActivity.EXTRA_AUTO_SEND, true)
             )
+        } else {
+            Log.i(TAG, "Shizuku detected unsupported clip ($mime), skipping")
         }
     }
 
@@ -355,6 +394,15 @@ class ClipForegroundService : Service() {
             val result = sender.send(host, port, token, secret, fp, payload)
             Log.i(TAG, "Shizuku auto-send result: $result")
         }.start()
+    }
+
+    private fun broadcastLoading(show: Boolean, success: Boolean = true) {
+        val action = if (show) ClipOverlayManager.ACTION_SHOW_LOADING
+                     else ClipOverlayManager.ACTION_HIDE_LOADING
+        sendBroadcast(Intent(action).apply {
+            setPackage(packageName)
+            if (!show) putExtra(ClipOverlayManager.EXTRA_LOADING_SUCCESS, success)
+        })
     }
 
     private fun startShizukuPolling() {

@@ -8,6 +8,7 @@ import android.os.Bundle
 import android.util.Log
 import android.widget.Toast
 import com.clipsync.clipboard.ClipboardWriter
+import com.clipsync.overlay.ClipOverlayManager
 
 /**
  * Transparent trampoline Activity. Launched from the incoming-clip
@@ -52,14 +53,25 @@ class ApplyClipActivity : Activity() {
                 val uri = Uri.parse(uriStr)
                 try {
                     ClipboardWriter.writeImage(this, uri, mime)
+                    broadcastLoading(show = false, success = true)
                     toast("Image copied to clipboard")
                 } catch (t: Throwable) {
                     Log.w(TAG, "writeImage failed: ${t.message}")
+                    broadcastLoading(show = false, success = false)
                     toast("Failed to copy image")
                 }
             }
             else -> Log.w(TAG, "Unknown action: ${intent.action}")
         }
+    }
+
+    private fun broadcastLoading(show: Boolean, success: Boolean) {
+        val action = if (show) ClipOverlayManager.ACTION_SHOW_LOADING
+                     else ClipOverlayManager.ACTION_HIDE_LOADING
+        sendBroadcast(Intent(action).apply {
+            setPackage(packageName)
+            if (!show) putExtra(ClipOverlayManager.EXTRA_LOADING_SUCCESS, success)
+        })
     }
 
     private fun toast(msg: String) {
