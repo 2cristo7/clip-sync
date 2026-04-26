@@ -30,11 +30,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private lazy var menuBar = MenuBarController(
         hub: hub,
         onStartPairing: { [weak self] in self?.startPairing() },
+        onTailscale: { [weak self] in self?.showTailscale() },
         onQuit: { NSApp.terminate(nil) }
     )
     private var advertiser: BonjourAdvertiser?
     private var reachabilityMonitor: ReachabilityMonitor?
     private let pairingWindow = PairingWindowController()
+    private let tailscaleWindow = TailscaleWindowController()
     private var broadcastTask: Task<Void, Never>?
     private var logger = Logger(label: "clipsync.app")
 
@@ -118,6 +120,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return base
         }
         return "ClipSync"
+    }
+
+    private func showTailscale() {
+        tailscaleWindow.show(onStartPairing: { [weak self] in
+            self?.startPairing()
+        })
     }
 
     private func startPairing() {

@@ -6,15 +6,18 @@ final class MenuBarController: NSObject {
     private var statusItem: NSStatusItem?
     private let hub: WebSocketHub
     private let onStartPairing: () -> Void
+    private let onTailscale: () -> Void
     private let onQuit: () -> Void
     private var refreshTask: Task<Void, Never>?
     private var currentClients: [ClipClientInfo] = []
 
     init(hub: WebSocketHub,
          onStartPairing: @escaping () -> Void,
+         onTailscale: @escaping () -> Void,
          onQuit: @escaping () -> Void) {
         self.hub = hub
         self.onStartPairing = onStartPairing
+        self.onTailscale = onTailscale
         self.onQuit = onQuit
     }
 
@@ -72,6 +75,17 @@ final class MenuBarController: NSObject {
         pairItem.target = self
         menu.addItem(pairItem)
 
+        let tailscaleTitle = TailscaleHelper.isInstalled
+            ? "Tailscale Pairing…"
+            : "Setup Tailscale…"
+        let tailscaleItem = NSMenuItem(
+            title: tailscaleTitle,
+            action: #selector(handleTailscale),
+            keyEquivalent: "t"
+        )
+        tailscaleItem.target = self
+        menu.addItem(tailscaleItem)
+
         if !currentClients.isEmpty {
             let clientsItem = NSMenuItem(title: "Clients", action: nil, keyEquivalent: "")
             let submenu = NSMenu()
@@ -106,6 +120,10 @@ final class MenuBarController: NSObject {
 
     @objc private func handleStartPairing() {
         onStartPairing()
+    }
+
+    @objc private func handleTailscale() {
+        onTailscale()
     }
 
     @objc private func handleQuit() {

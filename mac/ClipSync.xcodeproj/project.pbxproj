@@ -40,6 +40,8 @@
 		A00000000000000000002203 /* X509 in Frameworks */ = {isa = PBXBuildFile; productRef = A00000000000000000002202 /* X509 */; };
 		A00000000000000000002302 /* ReachabilityMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000002301 /* ReachabilityMonitor.swift */; };
 		A00000000000000000002402 /* ReachabilityMonitorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000002401 /* ReachabilityMonitorTests.swift */; };
+		A00000000000000000002502 /* TailscaleHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000002501 /* TailscaleHelper.swift */; };
+		A00000000000000000002504 /* TailscaleWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000002503 /* TailscaleWindow.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -84,6 +86,8 @@
 		A00000000000000000001F01 /* AuthMiddlewareTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthMiddlewareTests.swift; sourceTree = "<group>"; };
 		A00000000000000000002301 /* ReachabilityMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReachabilityMonitor.swift; sourceTree = "<group>"; };
 		A00000000000000000002401 /* ReachabilityMonitorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReachabilityMonitorTests.swift; sourceTree = "<group>"; };
+		A00000000000000000002501 /* TailscaleHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TailscaleHelper.swift; sourceTree = "<group>"; };
+		A00000000000000000002503 /* TailscaleWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TailscaleWindow.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -187,6 +191,7 @@
 			children = (
 				A00000000000000000001001 /* BonjourAdvertiser.swift */,
 				A00000000000000000002301 /* ReachabilityMonitor.swift */,
+				A00000000000000000002501 /* TailscaleHelper.swift */,
 			);
 			path = Network;
 			sourceTree = "<group>";
@@ -213,6 +218,7 @@
 			children = (
 				A00000000000000000001301 /* MenuBarController.swift */,
 				A00000000000000000001401 /* PairingWindow.swift */,
+				A00000000000000000002503 /* TailscaleWindow.swift */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -352,6 +358,8 @@
 				A00000000000000000000504 /* PasteboardWatcher.swift in Sources */,
 				A00000000000000000002302 /* ReachabilityMonitor.swift in Sources */,
 				A00000000000000000000404 /* ServerConfig.swift in Sources */,
+				A00000000000000000002502 /* TailscaleHelper.swift in Sources */,
+				A00000000000000000002504 /* TailscaleWindow.swift in Sources */,
 				A00000000000000000001802 /* TLSManager.swift in Sources */,
 				A00000000000000000001A02 /* TokenStore.swift in Sources */,
 				A00000000000000000000406 /* WebSocketHub.swift in Sources */,
