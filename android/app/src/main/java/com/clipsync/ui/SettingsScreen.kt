@@ -34,11 +34,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.input.KeyboardType
@@ -69,6 +70,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.clipsync.discovery.Discovered
 import com.clipsync.storage.Prefs
+import com.clipsync.ui.ShizukuInstallState
 import com.clipsync.ui.theme.NeuButton
 import com.clipsync.ui.theme.NeuCard
 import com.clipsync.ui.theme.NeuColors
@@ -101,6 +103,140 @@ fun SettingsScreen(
         }
         lifecycleOwner?.lifecycle?.addObserver(observer)
         onDispose { lifecycleOwner?.lifecycle?.removeObserver(observer) }
+    }
+
+    val shizukuReady = state.shizukuState == "ready"
+    // Step 0: Shizuku not installed → blocking install modal
+    val showInstallModal = state.shizukuState == "not_installed"
+    // Step 1: Permissions modal — Media access + Shizuku both required
+    val showPermissionsModal = !showInstallModal && (!state.mediaPermissionGranted || !shizukuReady)
+
+    // Modal 0 — Download & install Shizuku (blocking)
+    if (showInstallModal) {
+        val install = state.shizukuInstall
+        AlertDialog(
+            onDismissRequest = {},
+            containerColor = NeuColors.SurfaceRaised,
+            title = { Text("Install Shizuku", style = MaterialTheme.typography.headlineMedium) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        "Shizuku is required for ClipSync to access the clipboard on Android 12+. " +
+                        "It's free and open-source.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        "After installing, open Shizuku and start its service via Wireless Debugging or ADB.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    when (install) {
+                        is ShizukuInstallState.Fetching -> {
+                            Text("Fetching latest version…", style = MaterialTheme.typography.bodySmall)
+                            androidx.compose.material3.LinearProgressIndicator(
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                        is ShizukuInstallState.Downloading -> {
+                            Text("Downloading… ${install.progress}%", style = MaterialTheme.typography.bodySmall)
+                            @Suppress("DEPRECATION")
+                            androidx.compose.material3.LinearProgressIndicator(
+                                progress = install.progress / 100f,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                        is ShizukuInstallState.Error -> {
+                            Text(
+                                "Error: ${install.message}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = NeuColors.Error,
+                            )
+                        }
+                        else -> {}
+                    }
+                }
+            },
+            confirmButton = {
+                when (install) {
+                    is ShizukuInstallState.Idle, is ShizukuInstallState.Error ->
+                        NeuButton(onClick = { vm.downloadShizuku(context) }, isAccent = true) {
+                            Text(
+                                if (install is ShizukuInstallState.Error) "Retry" else "Download",
+                                color = NeuColors.TextOnAccent,
+                            )
+                        }
+                    is ShizukuInstallState.ReadyToInstall ->
+                        NeuButton(onClick = { vm.installShizuku(context, install.file) }, isAccent = true) {
+                            Text("Install now", color = NeuColors.TextOnAccent)
+                        }
+                    else -> {}  // Fetching / Downloading — no button
+                }
+            },
+        )
+    }
+
+    // Modal 1 — Permissions (blocking): Media access + Shizuku
+    if (showPermissionsModal) {
+        AlertDialog(
+            onDismissRequest = {},
+            containerColor = NeuColors.SurfaceRaised,
+            title = { Text("Permissions required", style = MaterialTheme.typography.headlineMedium) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        "Grant these permissions so ClipSync can sync your clipboard.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    PermissionRow(
+                        label = "Media access",
+                        granted = state.mediaPermissionGranted,
+                        onGrant = {
+                            val perm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                                android.Manifest.permission.READ_MEDIA_IMAGES
+                            else
+                                android.Manifest.permission.READ_EXTERNAL_STORAGE
+                            mediaPermissionLauncher.launch(perm)
+                        },
+                        onRevoke = {
+                            context.startActivity(
+                                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                    data = Uri.parse("package:${context.packageName}")
+                                }
+                            )
+                        },
+                    )
+                    PermissionRow(
+                        label = "Shizuku",
+                        granted = shizukuReady,
+                        onGrant = {
+                            when (state.shizukuState) {
+                                "not_running" -> {
+                                    val launch = context.packageManager
+                                        .getLaunchIntentForPackage("moe.shizuku.privileged.api")
+                                    context.startActivity(
+                                        launch ?: Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS)
+                                    )
+                                }
+                                "no_permission" -> vm.requestShizukuPermission()
+                                else -> {}
+                            }
+                        },
+                        grantLabel = when (state.shizukuState) {
+                            "not_running" -> "Open Shizuku"
+                            "no_permission" -> "Grant"
+                            else -> "Setup"
+                        },
+                        onRevoke = {
+                            context.packageManager
+                                .getLaunchIntentForPackage("moe.shizuku.privileged.api")
+                                ?.let { context.startActivity(it) }
+                        },
+                        revokeLabel = "Manage",
+                    )
+                }
+            },
+            confirmButton = {},
+        )
     }
 
     Box(
@@ -280,186 +416,61 @@ fun SettingsScreen(
                 }
             }
 
-            // Auto-send toggle
-            NeuSectionHeader("Auto Send")
-            NeuCard {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                "Send automatically on copy",
-                                style = MaterialTheme.typography.titleMedium,
-                            )
-                            Text(
-                                "Sends clipboard to Mac as soon as you copy",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
-                        Switch(
-                            checked = state.autoSendEnabled,
-                            onCheckedChange = { vm.setAutoSendEnabled(context, it) },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = NeuColors.Accent,
-                                checkedTrackColor = NeuColors.Accent.copy(alpha = 0.3f),
-                                uncheckedThumbColor = NeuColors.TextSecondary,
-                                uncheckedTrackColor = NeuColors.DarkShadow.copy(alpha = 0.3f),
-                            )
-                        )
-                    }
-                    // Accessibility Service only works on Android 11 (API 30) and below
-                    if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.R
-                        && state.autoSendEnabled
-                        && !isAccessibilityServiceEnabled(context)
-                    ) {
-                        NeuButton(
-                            onClick = {
-                                context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                            },
-                            isAccent = true,
-                        ) {
-                            Text("Enable in Accessibility Settings", color = NeuColors.TextOnAccent)
-                        }
-                    }
-                }
-            }
-
-            // Screenshot sync
-            NeuSectionHeader("Screenshot Sync")
-            NeuCard {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(
-                        "Auto-send screenshots",
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-                    Text(
-                        "Automatically sends screenshots to Mac when you take them",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    if (!state.mediaPermissionGranted) {
-                        NeuButton(
-                            onClick = {
-                                val perm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
-                                    android.Manifest.permission.READ_MEDIA_IMAGES
-                                else
-                                    android.Manifest.permission.READ_EXTERNAL_STORAGE
-                                mediaPermissionLauncher.launch(perm)
-                            },
-                            isAccent = true,
-                        ) {
-                            Text("Grant media access", color = NeuColors.TextOnAccent)
-                        }
-                    } else {
-                        NeuStatusBadge(label = "Media access granted", color = NeuColors.Connected)
-                    }
-                    // Overlay permission needed for the upload progress indicator
-                    if (!state.overlayPermissionGranted) {
-                        NeuButton(
-                            onClick = {
-                                context.startActivity(
-                                    Intent(
-                                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                        Uri.parse("package:${context.packageName}")
-                                    )
-                                )
-                            },
-                            isAccent = false,
-                        ) {
-                            Text("Grant overlay for upload indicator", color = NeuColors.TextSecondary)
-                        }
-                    } else {
-                        NeuStatusBadge(label = "Upload indicator ready", color = NeuColors.Connected)
-                    }
-                }
-            }
-
-            // LEGACY: Send-to-Mac FAB — superseded by Shizuku auto-send.
-            // Kept in code for reference; hidden from UI.
-            // To restore: uncomment the block below and re-add overlayEnabled toggle to SettingsState.
-            /*
-            NeuSectionHeader("Clipboard Overlay")
-            NeuCard {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text("Send to Mac FAB", style = MaterialTheme.typography.titleMedium)
-                            Text("Shows a floating button when you copy something", style = MaterialTheme.typography.bodySmall)
-                        }
-                        Switch(checked = state.overlayEnabled, onCheckedChange = { vm.setOverlayEnabled(context, it) }, colors = SwitchDefaults.colors(checkedThumbColor = NeuColors.Accent, checkedTrackColor = NeuColors.Accent.copy(alpha = 0.3f), uncheckedThumbColor = NeuColors.TextSecondary, uncheckedTrackColor = NeuColors.DarkShadow.copy(alpha = 0.3f)))
-                    }
-                    if (state.overlayEnabled && !state.overlayPermissionGranted) {
-                        NeuButton(onClick = { context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}"))) }, isAccent = true) {
-                            Text("Grant overlay permission", color = NeuColors.TextOnAccent)
-                        }
-                    }
-                }
-            }
-            */
-
-            // Clipboard access method (Shizuku)
+            // Clipboard access (Shizuku)
             NeuSectionHeader("Clipboard Access")
             NeuCard {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    val canUseAccessibility = Build.VERSION.SDK_INT <= Build.VERSION_CODES.R
-                    val methodLabel = when (state.shizukuState) {
-                        "ready" -> "Shizuku (recommended)"
-                        else -> if (canUseAccessibility && isAccessibilityServiceEnabled(context))
-                            "Accessibility Service" else "Clipboard listener"
-                    }
-                    val methodDescription = when (state.shizukuState) {
-                        "ready" -> "Clipboard access via Shizuku"
-                        "not_installed" -> "Install Shizuku for better clipboard access"
-                        "not_running" -> "Shizuku is installed but not running. Start it via ADB or root"
-                        "no_permission" -> "Shizuku is running but ClipSync needs permission"
-                        else -> "Checking Shizuku status..."
-                    }
-
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     NeuStatusBadge(
-                        label = methodLabel,
-                        color = if (state.shizukuState == "ready") NeuColors.Connected
-                                else NeuColors.TextSecondary
+                        label = if (shizukuReady) "Shizuku active" else "Shizuku inactive",
+                        color = if (shizukuReady) NeuColors.Connected else NeuColors.TextSecondary,
                     )
                     Text(
-                        methodDescription,
+                        if (shizukuReady)
+                            "Direct clipboard access is active. Starts and stops with the Mac connection."
+                        else
+                            "Shizuku is not active. Go to Permissions to set it up.",
                         style = MaterialTheme.typography.bodySmall,
                     )
+                }
+            }
 
-                    when (state.shizukuState) {
-                        "not_installed" -> {
-                            NeuButton(
-                                onClick = {
-                                    context.startActivity(
-                                        Intent(
-                                            Intent.ACTION_VIEW,
-                                            Uri.parse("https://github.com/RikkaApps/Shizuku/releases/latest")
-                                        )
-                                    )
-                                },
-                                isAccent = true,
-                            ) {
-                                Text("Install Shizuku", color = NeuColors.TextOnAccent)
-                            }
+            // Toggles
+            NeuSectionHeader("Features")
+            NeuCard {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    ToggleRow(
+                        title = "Auto send on copy",
+                        subtitle = "Sends clipboard to Mac as soon as you copy",
+                        checked = state.autoSendEnabled,
+                        onCheckedChange = { vm.setAutoSendEnabled(context, it) },
+                    )
+                }
+            }
+
+            // Permissions info
+            NeuSectionHeader("Permissions")
+            NeuCard {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    PermissionInfoRow(
+                        label = "Notifications",
+                        description = "Required for the sync service to run in the background",
+                        granted = state.notificationPermissionGranted,
+                        onManage = {
+                            context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                            })
                         }
-                        "no_permission" -> {
-                            NeuButton(
-                                onClick = { vm.requestShizukuPermission() },
-                                isAccent = true,
-                            ) {
-                                Text("Grant Shizuku permission", color = NeuColors.TextOnAccent)
-                            }
+                    )
+                    PermissionInfoRow(
+                        label = "Media access",
+                        description = "Required for sending screenshots to Mac",
+                        granted = state.mediaPermissionGranted,
+                        onManage = {
+                            context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                data = Uri.parse("package:${context.packageName}")
+                            })
                         }
-                        "ready" -> {
-                            NeuButton(
-                                onClick = { vm.stopShizukuListener(context) },
-                                isAccent = false,
-                            ) {
-                                Text("Stop Shizuku Listener", color = NeuColors.Error)
-                            }
-                        }
-                    }
+                    )
                 }
             }
 
@@ -487,6 +498,107 @@ fun SettingsScreen(
                 pairingTarget = null
                 vm.pair(context, target, code)
             }
+        )
+    }
+}
+
+@Composable
+private fun PermissionRow(
+    label: String,
+    granted: Boolean,
+    onGrant: () -> Unit,
+    grantLabel: String = "Grant",
+    onRevoke: (() -> Unit)? = null,
+    revokeLabel: String = "Manage",
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyLarge)
+        if (granted) {
+            if (onRevoke != null) {
+                NeuButton(onClick = onRevoke, isAccent = false) {
+                    Text(revokeLabel, color = NeuColors.TextSecondary)
+                }
+            } else {
+                Icon(
+                    Icons.Filled.Check,
+                    contentDescription = "Granted",
+                    tint = NeuColors.Connected,
+                    modifier = Modifier.size(24.dp),
+                )
+            }
+        } else {
+            NeuButton(onClick = onGrant, isAccent = true) {
+                Text(grantLabel, color = NeuColors.TextOnAccent)
+            }
+        }
+    }
+}
+
+@Composable
+private fun PermissionInfoRow(
+    label: String,
+    description: String,
+    granted: Boolean,
+    onManage: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .clip(CircleShape)
+                        .background(if (granted) NeuColors.Connected else NeuColors.Error)
+                )
+                Text(label, style = MaterialTheme.typography.titleMedium)
+            }
+            Text(
+                description,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(start = 16.dp),
+            )
+        }
+        NeuButton(onClick = onManage) {
+            Text("Manage", color = NeuColors.TextPrimary)
+        }
+    }
+}
+
+@Composable
+private fun ToggleRow(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.titleMedium)
+            Text(subtitle, style = MaterialTheme.typography.bodySmall)
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = NeuColors.Accent,
+                checkedTrackColor = NeuColors.Accent.copy(alpha = 0.3f),
+                uncheckedThumbColor = NeuColors.TextSecondary,
+                uncheckedTrackColor = NeuColors.DarkShadow.copy(alpha = 0.3f),
+            )
         )
     }
 }
@@ -579,7 +691,7 @@ private fun PairingCodeDialog(
     }
     AlertDialog(
         onDismissRequest = onDismiss,
-        containerColor = NeuColors.Background,
+        containerColor = NeuColors.SurfaceRaised,
         title = {
             Text(
                 "Enter pairing code",
