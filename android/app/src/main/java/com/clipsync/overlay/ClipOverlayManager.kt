@@ -149,7 +149,7 @@ class ClipOverlayManager(private val context: Context) {
     private fun showSuccessFeedback() {
         val view = fabView ?: return
         val icon = view.findViewWithTag<ImageView>("icon")
-        icon?.setColorFilter(Color.parseColor("#4CAF50"))
+        icon?.setColorFilter(Color.parseColor("#2ECC76"))
         view.alpha = 1.0f
 
         handler.postDelayed({ 
@@ -198,15 +198,15 @@ class ClipOverlayManager(private val context: Context) {
                 val radius = (w - 2 * inset) / 2f
 
                 // Outer shadow (clay feel)
-                shadowPaint.setShadowLayer(dpToPx(8).toFloat(), 0f, dpToPx(3).toFloat(), Color.parseColor("#40000000"))
+                shadowPaint.setShadowLayer(dpToPx(8).toFloat(), 0f, dpToPx(3).toFloat(), Color.parseColor("#401AAD5A"))
                 shadowPaint.color = Color.TRANSPARENT
                 canvas.drawOval(rect, shadowPaint)
 
                 // Main body gradient (mint green clay)
                 paint.shader = LinearGradient(
                     0f, 0f, 0f, h,
-                    Color.parseColor("#A8E6CF"),
-                    Color.parseColor("#7BC8A4"),
+                    Color.parseColor("#4BDD8A"),
+                    Color.parseColor("#1AAD5A"),
                     Shader.TileMode.CLAMP
                 )
                 canvas.drawOval(rect, paint)

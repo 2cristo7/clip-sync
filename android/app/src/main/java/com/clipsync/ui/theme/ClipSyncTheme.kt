@@ -1,6 +1,5 @@
 package com.clipsync.ui.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
 import androidx.compose.material3.lightColorScheme
@@ -13,122 +12,123 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 
-/**
- * ClipSync neumorphic-inspired colour palette.
- *
- * Neumorphism works best on a warm, muted, light surface where the light and
- * dark shadows create the characteristic "extruded" look. We pair this with
- * an accent purple for interactive elements.
- */
-object NeuColors {
-    // Surface / background
-    val Background = Color(0xFFECE9E6)
-    val Surface = Color(0xFFECE9E6)
-    val SurfaceVariant = Color(0xFFE2DFDC)
+object ClayColors {
+    // Backgrounds
+    val Background        = Color(0xFFFFFFFF)
+    val Surface           = Color(0xFFFFFFFF)
+    val SurfaceGradTop    = Color(0xFFFFFFFF)
+    val SurfaceGradBottom = Color(0xFFF2FFF8)
+    val SurfaceVariant    = Color(0xFFE4F5EC)
 
-    // Shadows
-    val LightShadow = Color(0xFFFFFFFF)
-    val DarkShadow = Color(0xFFBABECC)
-
-    // Accent
-    val Accent = Color(0xFF6C63FF)
-    val AccentDark = Color(0xFF5A52E0)
+    // Emerald greens
+    val Emerald       = Color(0xFF2ECC76)
+    val EmeraldLight  = Color(0xFF4BDD8A)
+    val EmeraldDark   = Color(0xFF1AAD5A)
+    val EmeraldShadow = Color(0x261AAD5A)
 
     // Status
-    val Connected = Color(0xFF4CAF50)
-    val Disconnected = Color(0xFF9E9E9E)
-    val Error = Color(0xFFE57373)
+    val Connected    = Color(0xFF2ECC76)
+    val Disconnected = Color(0xFFB0C8BC)
+    val Error        = Color(0xFFFF6B6B)
 
     // Text
-    val TextPrimary = Color(0xFF2D3436)
-    val TextSecondary = Color(0xFF636E72)
-    val TextOnAccent = Color.White
-
-    // FAB clay colours
-    val ClayGradientStart = Color(0xFFA8E6CF)
-    val ClayGradientEnd = Color(0xFF7BC8A4)
-    val ClayShadow = Color(0x40000000)
-    val ClayHighlight = Color(0x40FFFFFF)
+    val TextPrimary   = Color(0xFF1A2E22)
+    val TextSecondary = Color(0xFF5A7A66)
+    val TextOnEmerald = Color.White
 }
 
-/** Extra colour tokens exposed via [LocalNeuColors]. */
-data class NeuColorScheme(
-    val lightShadow: Color = NeuColors.LightShadow,
-    val darkShadow: Color = NeuColors.DarkShadow,
-    val connected: Color = NeuColors.Connected,
-    val disconnected: Color = NeuColors.Disconnected,
-    val textSecondary: Color = NeuColors.TextSecondary,
-    val accent: Color = NeuColors.Accent,
+@Suppress("unused")
+object NeuColors {
+    val Background     get() = ClayColors.Background
+    val Surface        get() = ClayColors.Surface
+    val SurfaceVariant get() = ClayColors.SurfaceVariant
+    val LightShadow    get() = Color.White
+    val DarkShadow     get() = ClayColors.Disconnected
+    val Accent         get() = ClayColors.Emerald
+    val AccentDark     get() = ClayColors.EmeraldDark
+    val Connected      get() = ClayColors.Connected
+    val Disconnected   get() = ClayColors.Disconnected
+    val Error          get() = ClayColors.Error
+    val TextPrimary    get() = ClayColors.TextPrimary
+    val TextSecondary  get() = ClayColors.TextSecondary
+    val TextOnAccent   get() = ClayColors.TextOnEmerald
+}
+
+data class ClayColorScheme(
+    val emerald: Color       = ClayColors.Emerald,
+    val connected: Color     = ClayColors.Connected,
+    val disconnected: Color  = ClayColors.Disconnected,
+    val textSecondary: Color = ClayColors.TextSecondary,
 )
 
-val LocalNeuColors = staticCompositionLocalOf { NeuColorScheme() }
+val LocalClayColors = staticCompositionLocalOf { ClayColorScheme() }
 
 private val ClipSyncColorScheme = lightColorScheme(
-    primary = NeuColors.Accent,
-    onPrimary = NeuColors.TextOnAccent,
-    secondary = NeuColors.AccentDark,
-    background = NeuColors.Background,
-    surface = NeuColors.Surface,
-    surfaceVariant = NeuColors.SurfaceVariant,
-    onBackground = NeuColors.TextPrimary,
-    onSurface = NeuColors.TextPrimary,
-    error = NeuColors.Error,
+    primary        = ClayColors.Emerald,
+    onPrimary      = ClayColors.TextOnEmerald,
+    secondary      = ClayColors.EmeraldDark,
+    background     = ClayColors.Background,
+    surface        = ClayColors.Surface,
+    surfaceVariant = ClayColors.SurfaceVariant,
+    onBackground   = ClayColors.TextPrimary,
+    onSurface      = ClayColors.TextPrimary,
+    error          = ClayColors.Error,
 )
 
 private val ClipSyncTypography = Typography(
     headlineLarge = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Bold,
-        fontSize = 28.sp,
+        fontFamily    = FontFamily.Default,
+        fontWeight    = FontWeight.Bold,
+        fontSize      = 28.sp,
         letterSpacing = (-0.5).sp,
-        color = NeuColors.TextPrimary,
+        color         = ClayColors.TextPrimary,
     ),
     headlineMedium = TextStyle(
-        fontFamily = FontFamily.Default,
-        fontWeight = FontWeight.Bold,
-        fontSize = 22.sp,
+        fontFamily    = FontFamily.Default,
+        fontWeight    = FontWeight.Bold,
+        fontSize      = 22.sp,
         letterSpacing = (-0.3).sp,
-        color = NeuColors.TextPrimary,
+        color         = ClayColors.TextPrimary,
     ),
     titleMedium = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 16.sp,
-        color = NeuColors.TextPrimary,
+        fontSize   = 16.sp,
+        color      = ClayColors.TextPrimary,
     ),
     bodyLarge = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.Normal,
-        fontSize = 16.sp,
-        color = NeuColors.TextPrimary,
+        fontSize   = 16.sp,
+        color      = ClayColors.TextPrimary,
     ),
     bodyMedium = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.Normal,
-        fontSize = 14.sp,
-        color = NeuColors.TextSecondary,
+        fontSize   = 14.sp,
+        color      = ClayColors.TextSecondary,
     ),
     bodySmall = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.Normal,
-        fontSize = 12.sp,
-        color = NeuColors.TextSecondary,
+        fontSize   = 12.sp,
+        color      = ClayColors.TextSecondary,
     ),
     labelLarge = TextStyle(
         fontFamily = FontFamily.Default,
         fontWeight = FontWeight.SemiBold,
-        fontSize = 14.sp,
-        color = NeuColors.TextOnAccent,
+        fontSize   = 14.sp,
+        color      = ClayColors.TextOnEmerald,
     ),
 )
 
 @Composable
 fun ClipSyncTheme(content: @Composable () -> Unit) {
-    CompositionLocalProvider(LocalNeuColors provides NeuColorScheme()) {
+    CompositionLocalProvider(LocalClayColors provides ClayColorScheme()) {
         MaterialTheme(
             colorScheme = ClipSyncColorScheme,
-            typography = ClipSyncTypography,
-            content = content,
+            typography  = ClipSyncTypography,
+            content     = content,
         )
     }
 }
