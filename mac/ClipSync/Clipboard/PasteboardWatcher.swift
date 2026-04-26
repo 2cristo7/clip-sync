@@ -117,12 +117,28 @@ final class PasteboardWatcher: @unchecked Sendable {
             return ClipPayload.image(data, mime: "image/png")
         }
         if types.contains(.tiff), let data = pasteboard.data(forType: .tiff) {
+            // Convert TIFF → PNG for cross-platform compatibility.
+            // Android doesn't handle TIFF natively.
+            if let pngData = Self.tiffToPng(data) {
+                return ClipPayload.image(pngData, mime: "image/png")
+            }
             return ClipPayload.image(data, mime: "image/tiff")
         }
         if types.contains(.string), let value = pasteboard.string(forType: .string), !value.isEmpty {
             return ClipPayload.text(value)
         }
         return nil
+    }
+
+    /// Convert TIFF data to PNG for cross-platform compatibility.
+    private static func tiffToPng(_ tiffData: Data) -> Data? {
+        guard let image = NSImage(data: tiffData),
+              let tiffRep = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiffRep),
+              let pngData = bitmap.representation(using: .png, properties: [:]) else {
+            return nil
+        }
+        return pngData
     }
 
     /// Hash payload content ignoring ts/nonce so echoes are detected regardless of timestamp.

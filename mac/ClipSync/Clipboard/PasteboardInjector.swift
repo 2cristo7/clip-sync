@@ -55,7 +55,8 @@ final class PasteboardInjector: @unchecked Sendable {
         case .image:
             let type = Self.pasteboardType(forMime: payload.mime)
             guard let type else { throw PasteboardInjectionError.unsupportedMime(payload.mime) }
-            guard pasteboard.setData(data, forType: type) else {
+            let imageData = Self.convertToPngIfNeeded(data: data, mime: payload.mime) ?? data
+            guard pasteboard.setData(imageData, forType: type) else {
                 throw PasteboardInjectionError.writeFailed
             }
         }
@@ -70,7 +71,22 @@ final class PasteboardInjector: @unchecked Sendable {
         switch mime.lowercased() {
         case "image/png": return .png
         case "image/tiff": return .tiff
+        case "image/jpeg", "image/jpg": return .png  // JPEG data will be converted to PNG
         default: return nil
         }
+    }
+
+    /// Convert JPEG data to PNG for pasteboard injection.
+    /// NSPasteboard handles PNG natively; JPEG needs conversion.
+    private static func convertToPngIfNeeded(data: Data, mime: String) -> Data? {
+        let lower = mime.lowercased()
+        guard lower == "image/jpeg" || lower == "image/jpg" else { return data }
+        guard let image = NSImage(data: data) else { return nil }
+        guard let tiffRep = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiffRep),
+              let pngData = bitmap.representation(using: .png, properties: [:]) else {
+            return nil
+        }
+        return pngData
     }
 }

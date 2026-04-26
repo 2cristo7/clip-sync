@@ -132,7 +132,13 @@ final class ClipServer {
         }
         router.post("/inject") { request, context -> InjectResponse in
             let sourceTag = request.headers[HTTPField.Name("X-ClipSync-Source")!]
-            let payload = try await request.decode(as: ClipPayload.self, context: context)
+            // Decode manually instead of request.decode() — the default
+            // BasicRequestContext.maxUploadSize is 2 MB which is too small
+            // for images. AuthMiddleware already collected the body with its
+            // own (higher) limit, so we just re-collect the buffered bytes.
+            var req = request
+            let buffer = try await req.collectBody(upTo: 25 * 1024 * 1024)
+            let payload = try JSONDecoder().decode(ClipPayload.self, from: buffer)
             context.logger.info("inject received", metadata: [
                 "source": .string(sourceTag ?? "unknown"),
                 "type": .string(payload.type.rawValue),
