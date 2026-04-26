@@ -26,6 +26,7 @@ import org.json.JSONObject
 import rikka.shizuku.Shizuku
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -70,6 +71,8 @@ data class SettingsState(
     val shizukuInstall: ShizukuInstallState = ShizukuInstallState.Idle,
     val tailscaleState: TailscaleState = TailscaleState.Unknown,
     val isOnMobileData: Boolean = false,
+    val isOnWifi: Boolean = false,
+    val isTailscaleVpnActive: Boolean = false,
     val error: String? = null
 )
 
@@ -79,6 +82,7 @@ class SettingsViewModel : ViewModel() {
     val state: StateFlow<SettingsState> = _state.asStateFlow()
 
     private var discoveryJob: Job? = null
+    private var networkWatchJob: Job? = null
 
     fun bootstrap(context: Context) {
         try {
@@ -102,6 +106,7 @@ class SettingsViewModel : ViewModel() {
             if (prefs.mode == Prefs.MODE_AUTO) startDiscovery(context)
             refreshShizukuState(context)
             refreshTailscaleState(context)
+            startNetworkWatch(context)
 
             if (paired) {
                 val host = prefs.host ?: return
@@ -122,9 +127,12 @@ class SettingsViewModel : ViewModel() {
         }
     }
 
-    fun setMode(mode: String) {
+    fun setMode(context: Context, mode: String) {
         L.action(M, "setMode mode=$mode")
+        Prefs(context).mode = mode
         _state.value = _state.value.copy(mode = mode)
+        if (mode == Prefs.MODE_AUTO) startDiscovery(context)
+        else discoveryJob?.cancel()
     }
 
     fun setAutoSendEnabled(context: Context, enabled: Boolean) {
@@ -137,10 +145,32 @@ class SettingsViewModel : ViewModel() {
     fun startSync(context: Context) {
         L.action(M, "startSync")
         val prefs = Prefs(context)
-        prefs.syncEnabled = true
         val host = prefs.host ?: ""
-        _state.value = _state.value.copy(syncEnabled = true, status = ConnectionStatus.Connected(host))
+        val port = prefs.port
+        val fp = prefs.fp
+
+        if (isTailscaleHost(host) && !_state.value.isTailscaleVpnActive) {
+            L.warn(M, "startSync blocked: Tailscale IP but VPN not active")
+            _state.value = _state.value.copy(
+                status = ConnectionStatus.Error("Tailscale VPN is not active. Open Tailscale first."),
+                error = "Tailscale VPN is not active. Open Tailscale first."
+            )
+            return
+        }
+
+        prefs.syncEnabled = true
+        _state.value = _state.value.copy(syncEnabled = true, status = ConnectionStatus.Connecting)
         ClipForegroundService.start(context)
+
+        viewModelScope.launch {
+            val alive = if (fp != null) {
+                withContext(Dispatchers.IO) { PairingApi().ping(host, port, fp) }
+            } else false
+            _state.value = _state.value.copy(
+                status = if (alive) ConnectionStatus.Connected(host)
+                         else ConnectionStatus.Error("Could not reach $host")
+            )
+        }
     }
 
     fun stopSync(context: Context) {
@@ -188,6 +218,16 @@ class SettingsViewModel : ViewModel() {
             is PairingTarget.Manual -> "${target.host}:${target.port}"
         }
         L.action(M, "pair target=$targetLabel")
+
+        if (target is PairingTarget.Manual && isTailscaleHost(target.host) && !_state.value.isTailscaleVpnActive) {
+            L.warn(M, "pair blocked: Tailscale IP but VPN not active")
+            _state.value = _state.value.copy(
+                status = ConnectionStatus.Error("Tailscale VPN is not active. Open Tailscale first."),
+                error = "Tailscale VPN is not active. Open Tailscale first."
+            )
+            return
+        }
+
         viewModelScope.launch {
             _state.value = _state.value.copy(status = ConnectionStatus.Connecting, error = null)
             try {
@@ -227,7 +267,7 @@ class SettingsViewModel : ViewModel() {
         }
     }
 
-    private fun persistAndStart(
+    private suspend fun persistAndStart(
         context: Context,
         prefs: Prefs,
         host: String,
@@ -250,10 +290,16 @@ class SettingsViewModel : ViewModel() {
             hasPairing = true,
             pairedHost = host,
             pairedPort = port,
-            status = ConnectionStatus.Connected(host),
+            mode = mode,
+            status = ConnectionStatus.Connecting,
             error = null
         )
         ClipForegroundService.start(context)
+        val alive = withContext(Dispatchers.IO) { PairingApi().ping(host, port, fp) }
+        _state.value = _state.value.copy(
+            status = if (alive) ConnectionStatus.Connected(host)
+                     else ConnectionStatus.Error("Paired but could not verify connection to $host")
+        )
     }
 
     fun refreshShizukuState(context: Context) {
@@ -426,6 +472,27 @@ class SettingsViewModel : ViewModel() {
         }
     }
 
+    private fun startNetworkWatch(context: Context) {
+        networkWatchJob?.cancel()
+        networkWatchJob = viewModelScope.launch {
+            while (true) {
+                delay(3_000)
+                val onWifi = isOnWifi(context)
+                val onMobile = isOnMobileData(context)
+                val vpnActive = withContext(Dispatchers.IO) { isTailscaleVpnActive(context) }
+                val prev = _state.value
+                if (onWifi != prev.isOnWifi || onMobile != prev.isOnMobileData || vpnActive != prev.isTailscaleVpnActive) {
+                    L.event(M, "network changed: wifi=$onWifi mobile=$onMobile vpn=$vpnActive")
+                    _state.value = prev.copy(
+                        isOnWifi = onWifi,
+                        isOnMobileData = onMobile,
+                        isTailscaleVpnActive = vpnActive,
+                    )
+                }
+            }
+        }
+    }
+
     fun refreshTailscaleState(context: Context) {
         val packages = listOf("com.tailscale.ipn", "com.tailscale.ipn.fdroid")
         val installed = packages.any { pkg ->
@@ -438,10 +505,14 @@ class SettingsViewModel : ViewModel() {
             }
         }
         val onMobile = isOnMobileData(context)
-        L.event(M, "tailscale check: installed=$installed onMobile=$onMobile")
+        val onWifi = isOnWifi(context)
+        val vpnActive = isTailscaleVpnActive(context)
+        L.event(M, "tailscale check: installed=$installed onMobile=$onMobile onWifi=$onWifi vpnActive=$vpnActive")
         _state.value = _state.value.copy(
             tailscaleState = if (installed) TailscaleState.Installed else TailscaleState.NotInstalled,
-            isOnMobileData = onMobile
+            isOnMobileData = onMobile,
+            isOnWifi = onWifi,
+            isTailscaleVpnActive = vpnActive,
         )
     }
 
@@ -464,6 +535,39 @@ class SettingsViewModel : ViewModel() {
         val network = cm.activeNetwork ?: return false
         val caps = cm.getNetworkCapabilities(network) ?: return false
         return caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+    }
+
+    private fun isOnWifi(context: Context): Boolean {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return false
+        val network = cm.activeNetwork ?: return false
+        val caps = cm.getNetworkCapabilities(network) ?: return false
+        return caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+    }
+
+    private fun isTailscaleHost(host: String): Boolean {
+        val parts = host.split(".")
+        if (parts.size != 4) return false
+        val first = parts[0].toIntOrNull() ?: return false
+        val second = parts[1].toIntOrNull() ?: return false
+        return first == 100 && second in 64..127
+    }
+
+    @Suppress("DEPRECATION")
+    private fun isTailscaleVpnActive(context: Context): Boolean {
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+            ?: return false
+        val tailscaleUid = try {
+            context.packageManager.getApplicationInfo("com.tailscale.ipn", 0).uid
+        } catch (_: PackageManager.NameNotFoundException) {
+            return false
+        }
+        return cm.allNetworks.any { network ->
+            val caps = cm.getNetworkCapabilities(network) ?: return@any false
+            if (!caps.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) return@any false
+            val ni = cm.getNetworkInfo(network) ?: return@any false
+            val extra = ni.extraInfo ?: return@any false
+            extra.contains("com.tailscale.ipn")
+        }
     }
 
     companion object {

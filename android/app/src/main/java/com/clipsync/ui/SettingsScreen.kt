@@ -341,10 +341,24 @@ fun SettingsScreen(
                     if (state.hasPairing) {
                         val isActive = state.status is ConnectionStatus.Connected ||
                             state.status is ConnectionStatus.Connecting
+                        val pairedToTailscale = state.pairedHost?.let { h ->
+                            h.split(".").let { p ->
+                                p.size == 4 && p[0].toIntOrNull() == 100 && ((p[1].toIntOrNull() ?: -1) in 64..127)
+                            }
+                        } ?: false
+                        val connectBlocked = pairedToTailscale && !state.isTailscaleVpnActive
                         if (!isActive) {
+                            if (connectBlocked) {
+                                Text(
+                                    "Tailscale VPN not active — open Tailscale to connect",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = NeuColors.Error,
+                                )
+                            }
                             NeuButton(
                                 onClick = { vm.startSync(context) },
                                 modifier = Modifier.fillMaxWidth(),
+                                enabled = !connectBlocked,
                                 isAccent = true
                             ) {
                                 Text("Connect", color = NeuColors.TextOnAccent)
@@ -362,22 +376,84 @@ fun SettingsScreen(
                 }
             }
 
-            // Mode selector
-            NeuSectionHeader("Connection Mode")
-            NeuSegmentedToggle(
-                options = listOf("Auto (mDNS)", "Manual IP"),
-                selectedIndex = if (state.mode == Prefs.MODE_AUTO) 0 else 1,
-                onSelected = { idx ->
-                    vm.setMode(if (idx == 0) Prefs.MODE_AUTO else Prefs.MODE_MANUAL)
+            // Connection mode — only show toggle when both options available
+            val canAuto = state.isOnWifi
+            val canManual = state.isTailscaleVpnActive
+            val effectiveMode = when {
+                canAuto && canManual -> state.mode
+                canAuto -> Prefs.MODE_AUTO
+                canManual -> Prefs.MODE_MANUAL
+                else -> ""
+            }
+
+            NeuSectionHeader("Connection Mode", modifier = Modifier.fillMaxWidth(), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            if (!canAuto && !canManual) {
+                NeuCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            "No connection available",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = NeuColors.Error,
+                        )
+                        Text(
+                            "Connect to the same WiFi as your Mac, or activate Tailscale VPN to sync remotely.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        if (state.tailscaleState is TailscaleState.Installed) {
+                            NeuButton(
+                                onClick = {
+                                    val intent = context.packageManager
+                                        .getLaunchIntentForPackage("com.tailscale.ipn")
+                                    if (intent != null) context.startActivity(intent)
+                                },
+                                isAccent = true,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text("Open Tailscale", color = NeuColors.TextOnAccent)
+                            }
+                        } else if (state.tailscaleState is TailscaleState.NotInstalled) {
+                            NeuButton(
+                                onClick = { vm.openTailscalePlayStore(context) },
+                                isAccent = true,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text("Install Tailscale", color = NeuColors.TextOnAccent)
+                            }
+                        }
+                    }
                 }
-            )
+            }
+
+            if (canAuto && canManual) {
+                NeuSegmentedToggle(
+                    options = listOf("Auto (mDNS)", "Manual IP"),
+                    selectedIndex = if (state.mode == Prefs.MODE_AUTO) 0 else 1,
+                    onSelected = { idx ->
+                        vm.setMode(context, if (idx == 0) Prefs.MODE_AUTO else Prefs.MODE_MANUAL)
+                    }
+                )
+            } else if (canAuto) {
+                Text(
+                    "WiFi — auto discovery",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
+            } else if (canManual) {
+                Text(
+                    "Tailscale VPN — manual IP",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
+            }
 
             // Discovery / Manual section
             Column(
                 modifier = Modifier.animateContentSize(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                if (state.mode == Prefs.MODE_AUTO) {
+                if (effectiveMode == Prefs.MODE_AUTO) {
                     NeuSectionHeader("Discovered Servers")
                     if (state.discovered.isEmpty()) {
                         NeuCard {
@@ -404,7 +480,7 @@ fun SettingsScreen(
                             )
                         }
                     }
-                } else {
+                } else if (effectiveMode == Prefs.MODE_MANUAL) {
                     NeuSectionHeader("Manual Connection")
                     if (state.hasPairing && state.mode == Prefs.MODE_MANUAL) {
                         val isActive = state.status is ConnectionStatus.Connected ||
@@ -441,6 +517,12 @@ fun SettingsScreen(
                             Regex("^[a-zA-Z0-9]([a-zA-Z0-9\\-\\.]*[a-zA-Z0-9])?\$")
                         )
                         val portValid = portNum != null && portNum in 1..65535
+                        val isTailscaleIp = hostTrimmed.split(".").let { parts ->
+                            parts.size == 4
+                                && (parts[0].toIntOrNull() == 100)
+                                && ((parts[1].toIntOrNull() ?: -1) in 64..127)
+                        }
+                        val vpnBlocked = isTailscaleIp && !state.isTailscaleVpnActive
                         NeuCard {
                             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                 OutlinedTextField(
@@ -448,9 +530,13 @@ fun SettingsScreen(
                                     onValueChange = { manualHost = it },
                                     label = { Text("Host / IP") },
                                     singleLine = true,
-                                    isError = manualHost.isNotEmpty() && !hostValid,
-                                    supportingText = if (manualHost.isNotEmpty() && !hostValid) {
+                                    isError = (manualHost.isNotEmpty() && !hostValid) || vpnBlocked,
+                                    supportingText = if (vpnBlocked) {
+                                        { Text("Tailscale VPN is not active", color = NeuColors.Error) }
+                                    } else if (manualHost.isNotEmpty() && !hostValid) {
                                         { Text("Enter a valid IP or hostname") }
+                                    } else if (isTailscaleIp && state.isTailscaleVpnActive) {
+                                        { Text("Tailscale IP detected — VPN active", color = NeuColors.Connected) }
                                     } else null,
                                     modifier = Modifier.fillMaxWidth()
                                 )
@@ -466,6 +552,27 @@ fun SettingsScreen(
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                     modifier = Modifier.fillMaxWidth()
                                 )
+                                if (vpnBlocked) {
+                                    NeuCard {
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        ) {
+                                            Text("⚠️", fontSize = 20.sp)
+                                            Column(Modifier.weight(1f)) {
+                                                Text(
+                                                    "Tailscale VPN not active",
+                                                    style = MaterialTheme.typography.titleSmall,
+                                                    color = NeuColors.Error,
+                                                )
+                                                Text(
+                                                    "Open Tailscale and connect before pairing.",
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
                                 NeuButton(
                                     onClick = {
                                         pairingTarget = PairingTarget.Manual(
@@ -473,7 +580,7 @@ fun SettingsScreen(
                                             port = portNum ?: 7010
                                         )
                                     },
-                                    enabled = hostValid && portValid,
+                                    enabled = hostValid && portValid && !vpnBlocked,
                                     isAccent = true,
                                 ) {
                                     Text("Pair", color = NeuColors.TextOnAccent)
@@ -488,20 +595,16 @@ fun SettingsScreen(
             if (state.tailscaleState is TailscaleState.Installed) {
                 NeuSectionHeader("Tailscale")
                 NeuCard {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        NeuStatusBadge(label = "Tailscale installed", color = NeuColors.Connected)
-                        Text(
-                            "You can pair with your Mac using its Tailscale IP from anywhere.",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                        if (state.mode != Prefs.MODE_MANUAL) {
-                            NeuButton(
-                                onClick = { vm.setMode(Prefs.MODE_MANUAL) },
-                                isAccent = true,
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text("Switch to Manual IP", color = NeuColors.TextOnAccent)
-                            }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        NeuStatusBadge(label = "Installed", color = NeuColors.Connected)
+                        if (state.isTailscaleVpnActive) {
+                            NeuStatusBadge(label = "VPN active", color = NeuColors.Accent)
+                        } else {
+                            NeuStatusBadge(label = "VPN off", color = NeuColors.Error)
                         }
                     }
                 }

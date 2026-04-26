@@ -163,7 +163,11 @@ fun NeuStatusBadge(
 }
 
 @Composable
-fun NeuSectionHeader(title: String, modifier: Modifier = Modifier) {
+fun NeuSectionHeader(
+    title: String,
+    modifier: Modifier = Modifier,
+    textAlign: androidx.compose.ui.text.style.TextAlign = androidx.compose.ui.text.style.TextAlign.Start,
+) {
     Text(
         text = title.uppercase(),
         style = MaterialTheme.typography.bodySmall.copy(
@@ -171,6 +175,7 @@ fun NeuSectionHeader(title: String, modifier: Modifier = Modifier) {
             letterSpacing = 1.5.sp,
             color         = NeuColors.Accent,
         ),
+        textAlign = textAlign,
         modifier = modifier.padding(bottom = 8.dp)
     )
 }
