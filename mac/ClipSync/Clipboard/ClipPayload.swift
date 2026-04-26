@@ -3,6 +3,7 @@ import Foundation
 enum ClipKind: String, Codable, Sendable {
     case text
     case image
+    case file
 }
 
 struct ClipPayload: Codable, Sendable, Equatable {
@@ -11,6 +12,7 @@ struct ClipPayload: Codable, Sendable, Equatable {
     let dataBase64: String
     let ts: Int64
     let nonce: String
+    let name: String?
 
     // Wire protocol uses "data" as the key; the Swift property is named
     // dataBase64 for clarity. CodingKeys bridges the two.
@@ -20,14 +22,16 @@ struct ClipPayload: Codable, Sendable, Equatable {
         case dataBase64 = "data"
         case ts
         case nonce
+        case name
     }
 
-    init(type: ClipKind, mime: String, dataBase64: String, ts: Int64, nonce: String) {
+    init(type: ClipKind, mime: String, dataBase64: String, ts: Int64, nonce: String, name: String? = nil) {
         self.type = type
         self.mime = mime
         self.dataBase64 = dataBase64
         self.ts = ts
         self.nonce = nonce
+        self.name = name
     }
 
     static func currentTimestampMillis() -> Int64 {
@@ -58,6 +62,19 @@ struct ClipPayload: Codable, Sendable, Equatable {
             nonce: newNonce()
         )
     }
+
+    static func file(_ data: Data, name: String, mime: String = "application/octet-stream", ts: Int64 = ClipPayload.currentTimestampMillis()) -> ClipPayload {
+        ClipPayload(
+            type: .file,
+            mime: mime,
+            dataBase64: data.base64EncodedString(),
+            ts: ts,
+            nonce: newNonce(),
+            name: name
+        )
+    }
+
+    static let maxFileBytes = 20 * 1024 * 1024
 
     var rawData: Data? {
         Data(base64Encoded: dataBase64)

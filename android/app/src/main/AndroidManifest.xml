@@ -76,6 +76,11 @@
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="image/*" />
             </intent-filter>
         </activity>
@@ -94,6 +99,14 @@
             android:exported="false">
             <intent-filter>
                 <action android:name="com.clipsync.action.SAVE_TO_GALLERY" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name="com.clipsync.notifications.SaveToDownloadsReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.clipsync.action.SAVE_TO_DOWNLOADS" />
             </intent-filter>
         </receiver>
 

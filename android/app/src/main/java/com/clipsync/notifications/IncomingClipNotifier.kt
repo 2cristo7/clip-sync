@@ -67,6 +67,7 @@ class IncomingClipNotifier(
         val builder = when (payload.type) {
             "text" -> buildTextNotification(payload)
             "image" -> buildImageNotification(payload)
+            "file" -> buildFileNotification(payload)
             else -> {
                 L.warn(M, "Unknown payload type: ${payload.type}")
                 return
@@ -150,6 +151,37 @@ class IncomingClipNotifier(
         return builder
     }
 
+    private fun buildFileNotification(payload: ClipPayload): NotificationCompat.Builder {
+        val bytes = Base64.decode(payload.data, Base64.DEFAULT)
+        val fileName = payload.name ?: "clipsync_file"
+        val ext = fileName.substringAfterLast('.', "bin")
+        val cacheFile: File = imageCache.writeToFile(bytes, ext)
+
+        val saveIntent = Intent(context, SaveToDownloadsReceiver::class.java).apply {
+            action = SaveToDownloadsReceiver.ACTION
+            putExtra(SaveToDownloadsReceiver.EXTRA_FILE_PATH, cacheFile.absolutePath)
+            putExtra(SaveToDownloadsReceiver.EXTRA_MIME, payload.mime)
+            putExtra(SaveToDownloadsReceiver.EXTRA_FILE_NAME, fileName)
+        }
+        val savePi = PendingIntent.getBroadcast(
+            context,
+            cacheFile.absolutePath.hashCode(),
+            saveIntent,
+            pendingFlags()
+        )
+        val sizeKB = bytes.size / 1024
+        val sizeText = if (sizeKB >= 1024) "${"%.1f".format(sizeKB / 1024f)} MB" else "$sizeKB KB"
+
+        return NotificationCompat.Builder(context, CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("File from Mac")
+            .setContentText("$fileName ($sizeText)")
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setAutoCancel(true)
+            .setContentIntent(savePi)
+            .addAction(0, context.getString(R.string.action_save_to_downloads), savePi)
+    }
+
     private fun hasPostNotifPermission(): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return true
         return ContextCompat.checkSelfPermission(
@@ -169,13 +201,17 @@ class IncomingClipNotifier(
     private fun pendingRequestCode(payload: ClipPayload): Int =
         (payload.nonce.hashCode() xor payload.ts.toInt())
 
-    private fun notifIdFor(payload: ClipPayload): Int =
-        if (payload.type == "image") NOTIF_ID_IMAGE else NOTIF_ID_TEXT
+    private fun notifIdFor(payload: ClipPayload): Int = when (payload.type) {
+        "image" -> NOTIF_ID_IMAGE
+        "file" -> NOTIF_ID_FILE
+        else -> NOTIF_ID_TEXT
+    }
 
     companion object {
         const val CHANNEL_ID = "clipsync_incoming"
         private const val NOTIF_ID_TEXT = 4244   // text notifications replace each other
         const val NOTIF_ID_IMAGE = 4245          // image notifications replace each other (separate slot)
+        const val NOTIF_ID_FILE = 4246           // file notifications replace each other (separate slot)
         private const val M = "Notif"
         private const val PREVIEW_MAX = 120
 

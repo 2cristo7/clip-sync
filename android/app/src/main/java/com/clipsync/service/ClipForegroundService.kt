@@ -158,6 +158,7 @@ class ClipForegroundService : Service() {
             stopSelf()
             return START_NOT_STICKY
         }
+        startForeground(NOTIF_ID, buildNotification("Connecting…"))
         connect()
         return START_STICKY
     }
@@ -273,6 +274,28 @@ class ClipForegroundService : Service() {
                 L.event(M, "launching ApplyClipActivity bytes=${bytes.size}")
             } catch (t: Throwable) {
                 L.warn(M, "Image clipboard write failed: ${t.message}")
+            }
+            if (isEcho(payload)) {
+                L.verbose(M, "skip notification: echo from mac")
+                return
+            }
+            try { incomingNotifier.notify(payload) } catch (t: Throwable) {
+                L.warn(M, "notify failed: ${t.message}")
+            }
+            return
+        }
+
+        if (payload.type == "file") {
+            try {
+                val bytes = Base64.decode(payload.data, Base64.DEFAULT)
+                val fileName = payload.name ?: "clipsync_file"
+                val ext = fileName.substringAfterLast('.', "bin")
+                val uri = imageCache.writeImage(bytes, ext)
+                ClipboardWriter.lastMacWriteMs = System.currentTimeMillis()
+                ClipboardWriter.writeFile(this, uri, payload.mime)
+                L.event(M, "file written to clipboard: $fileName bytes=${bytes.size}")
+            } catch (t: Throwable) {
+                L.warn(M, "File clipboard write failed: ${t.message}")
             }
             if (isEcho(payload)) {
                 L.verbose(M, "skip notification: echo from mac")
@@ -416,8 +439,11 @@ class ClipForegroundService : Service() {
 
     /** Returns true if [payload] is the Mac echoing back something we just sent. */
     private fun isEcho(payload: ClipPayload): Boolean {
-        val age = System.currentTimeMillis() - lastSentToMacMs
-        return age < 5_000 && payload.data.hashCode() == lastSentToMacHash
+        val now = System.currentTimeMillis()
+        val hash = payload.data.hashCode()
+        if (now - lastSentToMacMs < 5_000 && hash == lastSentToMacHash) return true
+        if (now - ClipSender.lastSentMs < 5_000 && hash == ClipSender.lastSentHash) return true
+        return false
     }
 
     private fun startShizukuPolling() {

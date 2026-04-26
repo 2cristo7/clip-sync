@@ -3,6 +3,7 @@ import CryptoKit
 import Dispatch
 import Foundation
 import Logging
+import UniformTypeIdentifiers
 
 protocol PasteboardReading: AnyObject {
     var changeCount: Int { get }
@@ -113,6 +114,12 @@ final class PasteboardWatcher: @unchecked Sendable {
 
     private func capturePayload() -> ClipPayload? {
         let types = pasteboard.types() ?? []
+        if types.contains(.fileURL),
+           let urlString = pasteboard.string(forType: .fileURL),
+           let url = URL(string: urlString), url.isFileURL,
+           let payload = captureFile(url: url) {
+            return payload
+        }
         if types.contains(.png), let data = pasteboard.data(forType: .png) {
             return ClipPayload.image(data, mime: "image/png")
         }
@@ -141,12 +148,48 @@ final class PasteboardWatcher: @unchecked Sendable {
         return pngData
     }
 
+    private func captureFile(url: URL) -> ClipPayload? {
+        var isDir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir),
+              !isDir.boolValue,
+              FileManager.default.isReadableFile(atPath: url.path) else {
+            return nil
+        }
+        guard let data = try? Data(contentsOf: url) else { return nil }
+        let name = url.lastPathComponent
+        if data.count > ClipPayload.maxFileBytes {
+            logger.warning("File too large to send: \(name) (\(data.count / (1024 * 1024)) MB)")
+            showFileTooLargeNotification(name: name)
+            return nil
+        }
+        let ext = url.pathExtension
+        var mime = "application/octet-stream"
+        if let uttype = UTType(filenameExtension: ext), let mimeType = uttype.preferredMIMEType {
+            mime = mimeType
+        }
+        return ClipPayload.file(data, name: name, mime: mime)
+    }
+
+    private func showFileTooLargeNotification(name: String) {
+        DispatchQueue.main.async {
+            let alert = NSAlert()
+            alert.messageText = "ClipSync"
+            alert.informativeText = "File too large to send: \(name) (max 20 MB)"
+            alert.alertStyle = .warning
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
+        }
+    }
+
     /// Hash payload content ignoring ts/nonce so echoes are detected regardless of timestamp.
     static func digest(for payload: ClipPayload) -> String {
         var hasher = SHA256()
         hasher.update(data: Data(payload.type.rawValue.utf8))
         hasher.update(data: Data(payload.mime.utf8))
         hasher.update(data: Data(payload.dataBase64.utf8))
+        if let name = payload.name {
+            hasher.update(data: Data(name.utf8))
+        }
         let digest = hasher.finalize()
         return digest.map { String(format: "%02x", $0) }.joined()
     }

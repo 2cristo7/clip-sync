@@ -44,6 +44,13 @@ object ClipboardWriter {
         cm.setPrimaryClip(buildTextClip(text))
     }
 
+    /** Write a file referenced by [uri] to the primary clipboard. */
+    fun writeFile(context: Context, uri: Uri, mime: String) {
+        lastMacWriteMs = System.currentTimeMillis()
+        val cm = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        cm.setPrimaryClip(buildImageClip(context.contentResolver, uri, mime))
+    }
+
     /** Write an image referenced by [uri] to the primary clipboard. */
     fun writeImage(context: Context, uri: Uri, mime: String) {
         lastMacWriteMs = System.currentTimeMillis()
