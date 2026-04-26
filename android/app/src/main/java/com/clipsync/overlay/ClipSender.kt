@@ -62,6 +62,9 @@ class ClipSender(
             .post(body.toRequestBody(JSON))
             .build()
 
+        lastSentHash = payload.data.hashCode()
+        lastSentMs = System.currentTimeMillis()
+
         return try {
             client.newCall(req).execute().use { resp ->
                 if (resp.isSuccessful) Result.Ok
@@ -74,5 +77,8 @@ class ClipSender(
 
     companion object {
         private val JSON = "application/json; charset=utf-8".toMediaType()
+
+        @Volatile var lastSentHash: Int = 0
+        @Volatile var lastSentMs: Long = 0L
     }
 }
