@@ -7,4 +7,7 @@
     <string name="action_save_to_gallery">Save to gallery</string>
     <string name="saved_to_gallery">Image saved to gallery</string>
     <string name="save_to_gallery_failed">Could not save image</string>
+    <string name="action_save_to_downloads">Save to Downloads</string>
+    <string name="saved_to_downloads">File saved to Downloads</string>
+    <string name="save_to_downloads_failed">Could not save file</string>
 </resources>
