@@ -121,6 +121,13 @@ class ShizukuClipboardManager(private val context: Context) {
     fun getClipboardMime(): String? =
         runCatching { userService?.clipboardMime }.getOrNull()
 
+    fun getClipboardUri(): String? =
+        runCatching { userService?.clipboardUri }.getOrNull()
+
+    fun setClipboardUri(uri: String, mime: String) {
+        runCatching { userService?.setClipboardUri(uri, mime) }
+    }
+
     fun destroy() {
         handler.removeCallbacksAndMessages(null)
         try { Shizuku.removeBinderReceivedListener(binderReceivedListener) } catch (_: Exception) {}
@@ -150,7 +157,7 @@ class ShizukuClipboardManager(private val context: Context) {
         )
             .processNameSuffix("clipboard")
             .debuggable(false)
-            .version(1)
+            .version(2)
 
     private fun bindUserService() {
         updateState(State.BINDING)

@@ -51,6 +51,20 @@ class ClipboardUserService : IClipUserService.Stub() {
         return if (desc.mimeTypeCount > 0) desc.getMimeType(0) else null
     }
 
+    override fun getClipboardUri(): String? {
+        val clip = getPrimaryClip() ?: return null
+        if (clip.itemCount == 0) return null
+        return clip.getItemAt(0).uri?.toString()
+    }
+
+    override fun setClipboardUri(uri: String, mime: String) {
+        val clipUri = android.net.Uri.parse(uri)
+        val description = android.content.ClipDescription("clipsync", arrayOf(mime))
+        val item = ClipData.Item(clipUri)
+        val clip = ClipData(description, item)
+        setPrimaryClipInternal(clip)
+    }
+
     override fun destroy() {
         System.exit(0)
     }
@@ -132,6 +146,9 @@ class ClipboardUserService : IClipUserService.Stub() {
         // Shell UID typically bypasses package/UID validation on most ROMs.
         // If the security check fails, getPrimaryClip() catches the SecurityException
         // and returns null, falling back gracefully.
-        private const val PACKAGE = "com.clipsync.app"
+        // UID 2000 (shell) must identify as "com.android.shell" so the
+        // clipboard service accepts the call. Using our own package name
+        // triggers SecurityException on Pixel / Android 13+.
+        private const val PACKAGE = "com.android.shell"
     }
 }
