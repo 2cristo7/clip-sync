@@ -266,6 +266,16 @@ Si hay un fallo:
   `docs/tailscale-setup.md`.
 - `NSBonjourServices` en `Info.plist` incluye `_clipsync._tcp`.
 
+#### Android — reglas de compilación
+
+- **No compilar para instalar en dispositivo** (`assembleDebug` + `adb install` están prohibidos).
+- Para verificar errores de compilación usar exclusivamente:
+  ```
+  ./gradlew compileDebugKotlin 2>&1 | grep -E "error:|warning:"
+  ```
+  Es el formato más ligero: solo compila Kotlin, sin dexing ni packaging, y filtra la salida a errores/warnings únicamente.
+- `assembleDebug` solo está permitido para verificar que el build completo no rompe (sin instalar).
+
 #### Notas de UI
 - `PairingWindow` tiene tamaño fijo **380×460** pt (no redimensionable).
 - El QR se genera una sola vez en `onAppear` y se cachea en `@State` —
