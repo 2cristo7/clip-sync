@@ -159,19 +159,9 @@ class SendClipActivity : Activity() {
 
     private fun handleResult(result: ClipSender.Result) {
         when (result) {
-            is ClipSender.Result.Ok -> {
-                toast("Sent to Mac")
-                sendBroadcast(Intent(ACTION_SEND_RESULT).apply {
-                    setPackage(packageName)
-                    putExtra(EXTRA_SUCCESS, true)
-                })
-            }
+            is ClipSender.Result.Ok -> toast("Sent to Mac")
             is ClipSender.Result.Failed -> {
                 toast("Failed: ${result.reason}")
-                sendBroadcast(Intent(ACTION_SEND_RESULT).apply {
-                    setPackage(packageName)
-                    putExtra(EXTRA_SUCCESS, false)
-                })
                 L.warn(M, "Send failed: ${result.reason}")
             }
         }
@@ -184,8 +174,6 @@ class SendClipActivity : Activity() {
 
     companion object {
         private const val M = "Send"
-        const val ACTION_SEND_RESULT = "com.clipsync.action.SEND_RESULT"
-        const val EXTRA_SUCCESS = "success"
         const val EXTRA_AUTO_SEND = "auto_send"
 
         fun intent(context: Context): Intent {

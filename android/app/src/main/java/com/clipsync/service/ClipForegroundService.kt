@@ -20,7 +20,6 @@ import com.clipsync.model.ClipPayload
 import com.clipsync.model.ClipPayloadBuilder
 import com.clipsync.net.ClipClient
 import com.clipsync.notifications.IncomingClipNotifier
-import com.clipsync.overlay.ClipOverlayManager
 import com.clipsync.overlay.ClipSender
 import com.clipsync.overlay.SendClipActivity
 import com.clipsync.screenshot.ScreenshotObserver
@@ -37,7 +36,7 @@ import kotlin.math.min
  *  - immediate reconnect whenever the default network changes.
  *
  * Incoming frames are forwarded to [IncomingClipNotifier].
- * Outbound sends are triggered manually via the overlay FAB → [SendClipActivity].
+ * Outbound sends are triggered via [SendClipActivity] (auto-send on copy or screenshot).
  */
 class ClipForegroundService : Service() {
 
@@ -52,7 +51,6 @@ class ClipForegroundService : Service() {
     private val reconnectRunnable = Runnable { connect() }
 
     private var networkObserver: NetworkChangeObserver? = null
-    private var overlayManager: ClipOverlayManager? = null
     private var clipboardManager: ClipboardManager? = null
     private var screenshotObserver: ScreenshotObserver? = null
     private var clipListenerRegistered = false
@@ -63,6 +61,10 @@ class ClipForegroundService : Service() {
     private var shizukuManager: ShizukuClipboardManager? = null
     private var lastShizukuHash = 0
     private var shizukuHashSeeded = false        // true after first successful hash read
+
+    // Echo suppression: track what we last sent to Mac to avoid notifying on the bounce-back
+    @Volatile private var lastSentToMacHash = 0
+    @Volatile private var lastSentToMacMs = 0L
     private val shizukuPollRunnable = object : Runnable {
         override fun run() {
             pollViaShizuku()
@@ -123,14 +125,17 @@ class ClipForegroundService : Service() {
         } catch (t: Throwable) {
             L.warn(M, "ImageCache cleanup failed: ${t.message}")
         }
-        startForeground(NOTIF_ID, buildNotification("Connecting..."))
+        // Must call startForeground() promptly after startForegroundService() (Android 8+).
+        // Immediately demote so no notification appears during idle/connecting state.
+        startForeground(NOTIF_ID, buildNotification("Connected"))
+        @Suppress("DEPRECATION")
+        stopForeground(true)
         networkObserver = NetworkChangeObserver(this) {
             backoffMs = INITIAL_BACKOFF_MS
             handler.removeCallbacks(reconnectRunnable)
             handler.post(reconnectRunnable)
         }
         networkObserver?.register()
-        overlayManager = ClipOverlayManager(this)
         clipboardManager = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
         shizukuManager = ShizukuClipboardManager(this).also { mgr ->
             mgr.onStateChanged = { state ->
@@ -142,28 +147,12 @@ class ClipForegroundService : Service() {
         screenshotObserver = ScreenshotObserver(this, handler) { _, mime, bytes ->
             if (!prefs.autoSendEnabled || !prefs.syncEnabled) return@ScreenshotObserver
             L.event(M, "screenshot auto-send mime=$mime bytes=${bytes.size}")
-            overlayManager?.showUploadIndicator()
             val payload = ClipPayloadBuilder.image(mime, bytes)
             sendPayloadToMac(payload)
         }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_UPDATE_OVERLAY) {
-            handler.post {
-                if (prefs.overlayEnabled) overlayManager?.showFab() else overlayManager?.dismiss()
-            }
-            return START_STICKY
-        }
-        if (intent?.action == ACTION_STOP_SHIZUKU) {
-            handler.post {
-                stopShizukuPolling()
-                shizukuManager?.destroy()
-                shizukuManager = null
-                L.action(M, "shizuku listener stopped")
-            }
-            return START_STICKY
-        }
         if (!prefs.hasPairing()) {
             L.warn(M, "No pairing stored, stopping service")
             stopSelf()
@@ -178,8 +167,6 @@ class ClipForegroundService : Service() {
         screenshotObserver = null
         networkObserver?.unregister()
         networkObserver = null
-        overlayManager?.destroy()
-        overlayManager = null
         unregisterClipListener()
         stopShizukuPolling()
         shizukuManager?.destroy()
@@ -203,7 +190,6 @@ class ClipForegroundService : Service() {
         val gen = wsGeneration
         ws?.cancel()
         ws = null
-        updateNotification("Connecting to $host...")
         val okClient = client.pinnedClient(host, fp)
         ws = client.connectWebSocket(okClient, host, port, token,
             onFrame = { payload ->
@@ -216,9 +202,8 @@ class ClipForegroundService : Service() {
                     is ClipClient.WsStatus.Open -> {
                         backoffMs = INITIAL_BACKOFF_MS
                         L.event("WS", "connected host=$host")
-                        updateNotification("Connected ($host)")
+                        startForeground(NOTIF_ID, buildNotification("Connected to $host"))
                         handler.post {
-                            if (prefs.overlayEnabled) overlayManager?.showFab()
                             registerClipListener()
                             if (shizukuManager?.isAvailable() == true) startShizukuPolling()
                             screenshotObserver?.register()
@@ -226,9 +211,9 @@ class ClipForegroundService : Service() {
                     }
                     is ClipClient.WsStatus.Closed -> {
                         L.event("WS", "closed host=$host code=${status.code}")
-                        updateNotification("Disconnected")
+                        @Suppress("DEPRECATION")
+                        stopForeground(true)
                         handler.post {
-                            overlayManager?.dismiss()
                             unregisterClipListener()
                             stopShizukuPolling()
                             screenshotObserver?.unregister()
@@ -237,9 +222,9 @@ class ClipForegroundService : Service() {
                     }
                     is ClipClient.WsStatus.Error -> {
                         L.warn("WS", "error host=$host msg=${status.message}")
-                        updateNotification("Error: ${status.message}")
+                        @Suppress("DEPRECATION")
+                        stopForeground(true)
                         handler.post {
-                            overlayManager?.dismiss()
                             unregisterClipListener()
                             stopShizukuPolling()
                             screenshotObserver?.unregister()
@@ -260,7 +245,10 @@ class ClipForegroundService : Service() {
             shizukuManager?.setClipboardText(text)
             lastShizukuHash = text.hashCode()
             L.event(M, "clipboard write via shizuku chars=${text.length}")
-            // Still show notification for visual feedback
+            if (isEcho(payload)) {
+                L.verbose(M, "skip notification: echo from mac")
+                return
+            }
             try { incomingNotifier.notify(payload) } catch (t: Throwable) {
                 L.warn(M, "notify failed: ${t.message}")
             }
@@ -271,7 +259,6 @@ class ClipForegroundService : Service() {
         // fails silently because UID 2000 (shell) cannot grant FileProvider URI
         // permissions on the system clipboard.
         if (payload.type == "image") {
-            broadcastLoading(show = true)
             try {
                 val bytes = Base64.decode(payload.data, Base64.DEFAULT)
                 val ext = IncomingClipNotifier.extensionForMime(payload.mime)
@@ -286,9 +273,11 @@ class ClipForegroundService : Service() {
                 L.event(M, "launching ApplyClipActivity bytes=${bytes.size}")
             } catch (t: Throwable) {
                 L.warn(M, "Image clipboard write failed: ${t.message}")
-                broadcastLoading(show = false, success = false)
             }
-            // Still show notification for visual feedback
+            if (isEcho(payload)) {
+                L.verbose(M, "skip notification: echo from mac")
+                return
+            }
             try { incomingNotifier.notify(payload) } catch (t: Throwable) {
                 L.warn(M, "notify failed: ${t.message}")
             }
@@ -296,6 +285,10 @@ class ClipForegroundService : Service() {
         }
 
         // Tier 2/3: Notification with ApplyClipActivity (no Shizuku)
+        if (isEcho(payload)) {
+            L.verbose(M, "skip notification: echo from mac")
+            return
+        }
         try {
             incomingNotifier.notify(payload)
         } catch (t: Throwable) {
@@ -352,11 +345,6 @@ class ClipForegroundService : Service() {
             .build()
     }
 
-    private fun updateNotification(text: String) {
-        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        nm.notify(NOTIF_ID, buildNotification(text))
-    }
-
     // --- Shizuku polling (Tier 1) ---
 
     private fun pollViaShizuku() {
@@ -398,7 +386,6 @@ class ClipForegroundService : Service() {
             // Direct URI reading from a Service fails because the clipboard URI
             // grant was given to the Shizuku process, not our app process.
             L.event(M, "shizuku image clip detected mime=$mime")
-            broadcastLoading(show = true)
             startActivity(
                 SendClipActivity.intent(this)
                     .putExtra(SendClipActivity.EXTRA_AUTO_SEND, true)
@@ -418,22 +405,19 @@ class ClipForegroundService : Service() {
         val token = prefs.token ?: return
         val secret = prefs.pairingSecret ?: return
         val fp = prefs.fp ?: return
+        lastSentToMacHash = payload.data.hashCode()
+        lastSentToMacMs = System.currentTimeMillis()
         val sender = ClipSender(client)
         Thread {
             val result = sender.send(host, port, token, secret, fp, payload)
             L.event(M, "auto-send result=$result type=${payload.type}")
-            val ok = result is ClipSender.Result.Ok
-            handler.post { overlayManager?.hideUploadIndicator(ok) }
         }.start()
     }
 
-    private fun broadcastLoading(show: Boolean, success: Boolean = true) {
-        val action = if (show) ClipOverlayManager.ACTION_SHOW_LOADING
-                     else ClipOverlayManager.ACTION_HIDE_LOADING
-        sendBroadcast(Intent(action).apply {
-            setPackage(packageName)
-            if (!show) putExtra(ClipOverlayManager.EXTRA_LOADING_SUCCESS, success)
-        })
+    /** Returns true if [payload] is the Mac echoing back something we just sent. */
+    private fun isEcho(payload: ClipPayload): Boolean {
+        val age = System.currentTimeMillis() - lastSentToMacMs
+        return age < 5_000 && payload.data.hashCode() == lastSentToMacHash
     }
 
     private fun startShizukuPolling() {
@@ -466,8 +450,6 @@ class ClipForegroundService : Service() {
         private const val INITIAL_BACKOFF_MS = 1_000L
         private const val MAX_BACKOFF_MS = 30_000L
         private const val SHIZUKU_POLL_MS = 500L
-        const val ACTION_UPDATE_OVERLAY = "com.clipsync.UPDATE_OVERLAY"
-        const val ACTION_STOP_SHIZUKU = "com.clipsync.STOP_SHIZUKU"
 
         fun start(context: Context) {
             val i = Intent(context, ClipForegroundService::class.java)
@@ -480,21 +462,6 @@ class ClipForegroundService : Service() {
 
         fun stop(context: Context) {
             context.stopService(Intent(context, ClipForegroundService::class.java))
-        }
-
-        fun updateOverlay(context: Context) {
-            val i = Intent(context, ClipForegroundService::class.java).apply {
-                action = ACTION_UPDATE_OVERLAY
-            }
-            try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    context.startForegroundService(i)
-                } else {
-                    context.startService(i)
-                }
-            } catch (_: Exception) {
-                // Service not running — pref already saved, FAB will respect it on next start
-            }
         }
     }
 }

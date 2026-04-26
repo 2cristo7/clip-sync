@@ -152,11 +152,11 @@ class IncomingClipNotifier(
     private fun pendingRequestCode(payload: ClipPayload): Int =
         (payload.nonce.hashCode() xor payload.ts.toInt())
 
-    private fun notifIdFor(payload: ClipPayload): Int =
-        (payload.nonce.hashCode() and 0x7fffffff) or 1
+    private fun notifIdFor(@Suppress("UNUSED_PARAMETER") payload: ClipPayload): Int = NOTIF_ID
 
     companion object {
         const val CHANNEL_ID = "clipsync_incoming"
+        private const val NOTIF_ID = 4244   // fixed ID — each incoming clip replaces the previous
         private const val M = "Notif"
         private const val PREVIEW_MAX = 120
 

@@ -51,11 +51,6 @@ class Prefs(context: Context) {
         get() = prefs.getString(K_SECRET, null)
         set(v) { prefs.edit().putString(K_SECRET, v).apply() }
 
-    /** Whether the clipboard overlay FAB is enabled. Defaults to true. */
-    var overlayEnabled: Boolean
-        get() = prefs.getBoolean(K_OVERLAY, true)
-        set(v) { prefs.edit().putBoolean(K_OVERLAY, v).apply() }
-
     /** Whether syncing is active. Defaults to true. */
     var syncEnabled: Boolean
         get() = prefs.getBoolean(K_SYNC_ENABLED, true)
@@ -88,7 +83,6 @@ class Prefs(context: Context) {
         private const val K_PORT = "port"
         private const val K_MODE = "mode"
         private const val K_SECRET = "pairing_secret"
-        private const val K_OVERLAY = "overlay_enabled"
         private const val K_SYNC_ENABLED = "sync_enabled"
         private const val K_AUTO_SEND = "auto_send_enabled"
         const val MODE_AUTO = "auto"
