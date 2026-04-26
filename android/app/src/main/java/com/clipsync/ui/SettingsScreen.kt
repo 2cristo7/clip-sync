@@ -48,6 +48,8 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -82,6 +84,10 @@ fun SettingsScreen(
     var pairingTarget by remember { mutableStateOf<PairingTarget?>(null) }
     var manualHost by rememberSaveable { mutableStateOf("") }
     var manualPort by rememberSaveable { mutableStateOf("7010") }
+
+    val mediaPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted -> vm.onMediaPermissionResult(granted) }
 
     LaunchedEffect(Unit) { vm.bootstrap(context) }
 
@@ -313,6 +319,37 @@ fun SettingsScreen(
                             isAccent = true,
                         ) {
                             Text("Enable in Accessibility Settings", color = NeuColors.TextOnAccent)
+                        }
+                    }
+                }
+            }
+
+            // Screenshot sync
+            NeuSectionHeader("Screenshot Sync")
+            NeuCard {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(
+                        "Auto-send screenshots",
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    Text(
+                        "Automatically sends screenshots to Mac when you take them",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    if (state.mediaPermissionGranted) {
+                        NeuStatusBadge(label = "Permission granted", color = NeuColors.Connected)
+                    } else {
+                        NeuButton(
+                            onClick = {
+                                val perm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+                                    android.Manifest.permission.READ_MEDIA_IMAGES
+                                else
+                                    android.Manifest.permission.READ_EXTERNAL_STORAGE
+                                mediaPermissionLauncher.launch(perm)
+                            },
+                            isAccent = true,
+                        ) {
+                            Text("Grant media access", color = NeuColors.TextOnAccent)
                         }
                     }
                 }
