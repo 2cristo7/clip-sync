@@ -21,7 +21,7 @@ struct TailscaleSetupView: View {
             }
         }
         .padding(28)
-        .frame(width: 380, height: 340)
+        .frame(width: 380, height: 380)
         .onAppear { refresh() }
     }
 
@@ -32,39 +32,62 @@ struct TailscaleSetupView: View {
                 .foregroundStyle(.green)
             Text("Tailscale is connected")
                 .font(.headline)
-            Text("Your Tailscale IP:")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            Text(ip)
-                .font(.system(size: 36, weight: .semibold, design: .monospaced))
-                .textSelection(.enabled)
-            Text("Enter this IP on your Android device, then pair.")
+            VStack(spacing: 4) {
+                Text("Your Tailscale IP")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                Text(ip)
+                    .font(.system(size: 32, weight: .semibold, design: .monospaced))
+                    .textSelection(.enabled)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+            }
+            Text("On your Android:\nTailscale section → \"Switch to Tailscale\"\n→ enter this IP → Pair.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-            Button("Start Pairing…") {
-                onStartPairing()
+                .fixedSize(horizontal: false, vertical: true)
+            Divider()
+            HStack(spacing: 12) {
+                Button("On same WiFi? Pair locally") {
+                    onStartPairing()
+                }
+                .buttonStyle(.bordered)
+                Button("Pair via Tailscale") {
+                    onStartPairing()
+                }
+                .buttonStyle(.borderedProminent)
             }
-            .buttonStyle(.borderedProminent)
         }
     }
 
     private var runningButNoIPView: some View {
         VStack(spacing: 16) {
-            Image(systemName: "exclamationmark.triangle.fill")
+            Image(systemName: "wifi.exclamationmark")
                 .font(.system(size: 48))
                 .foregroundStyle(.orange)
-            Text("Tailscale is installed but not connected")
+            Text("Tailscale VPN not connected")
                 .font(.headline)
-            Text("Open Tailscale and log in to get your IP address.")
+            Text("Tailscale is installed but the VPN is not active.\nConnect to the VPN to get your Tailscale IP.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-            Button("Open Tailscale") {
-                NSWorkspace.shared.open(URL(fileURLWithPath: "/Applications/Tailscale.app"))
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 12) {
+                Button("Open Tailscale") {
+                    NSWorkspace.shared.open(URL(fileURLWithPath: "/Applications/Tailscale.app"))
+                }
+                .buttonStyle(.borderedProminent)
+                Button("Refresh") { refresh() }
+                    .buttonStyle(.bordered)
             }
-            Button("Refresh") { refresh() }
-                .buttonStyle(.bordered)
+            Text("The view will refresh automatically once connected.")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
+        .onReceive(Timer.publish(every: 3, on: .main, in: .common).autoconnect()) { _ in
+            refresh()
         }
     }
 
@@ -100,14 +123,11 @@ struct TailscaleSetupView: View {
 final class TailscaleWindowController {
     private var window: NSWindow?
 
-    private static let windowSize = NSSize(width: 380, height: 340)
+    private static let windowSize = NSSize(width: 380, height: 380)
 
     func show(onStartPairing: @escaping () -> Void) {
-        if let window {
-            window.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            return
-        }
+        window?.close()
+        window = nil
         let view = TailscaleSetupView(onStartPairing: { [weak self] in
             self?.close()
             onStartPairing()
