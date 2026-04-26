@@ -2,6 +2,7 @@ package com.clipsync.ui
 
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
 import android.provider.Settings
 import android.text.TextUtils
 import androidx.compose.animation.AnimatedVisibility
@@ -101,22 +102,35 @@ fun SettingsScreen(vm: SettingsViewModel = viewModel()) {
                                 style = MaterialTheme.typography.titleMedium,
                             )
                             Text(
-                                statusSubtitle(state.status),
+                                statusSubtitle(state.status, state.hasPairing),
                                 style = MaterialTheme.typography.bodySmall,
                             )
+                        }
+                        if (state.shizukuState == "ready") {
+                            Spacer(Modifier.width(8.dp))
+                            NeuStatusBadge(label = "Shizuku", color = NeuColors.Connected)
                         }
                     }
 
                     if (state.hasPairing) {
-                        val isPaused = state.status is ConnectionStatus.Paused
-                        NeuButton(
-                            onClick = { vm.setSyncEnabled(context, isPaused) },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(
-                                if (isPaused) "Resume Sync" else "Pause Sync",
-                                color = if (isPaused) NeuColors.Accent else NeuColors.TextSecondary
-                            )
+                        val isActive = state.status is ConnectionStatus.Connected ||
+                            state.status is ConnectionStatus.Connecting
+                        if (!isActive) {
+                            NeuButton(
+                                onClick = { vm.startSync(context) },
+                                modifier = Modifier.fillMaxWidth(),
+                                isAccent = true
+                            ) {
+                                Text("Connect", color = NeuColors.TextOnAccent)
+                            }
+                        } else {
+                            NeuButton(
+                                onClick = { vm.stopSync(context) },
+                                modifier = Modifier.fillMaxWidth(),
+                                isAccent = false
+                            ) {
+                                Text("Stop Sync", color = NeuColors.Error)
+                            }
                         }
                     }
                 }
@@ -153,7 +167,12 @@ fun SettingsScreen(vm: SettingsViewModel = viewModel()) {
                         }
                     } else {
                         state.discovered.forEach { d ->
-                            DiscoveredServerCard(d) { pairingTarget = PairingTarget.Auto(d) }
+                            val isPaired = d.host == state.pairedHost && d.port == state.pairedPort
+                            DiscoveredServerCard(
+                                d = d,
+                                isPaired = isPaired,
+                                onPair = { if (!isPaired) pairingTarget = PairingTarget.Auto(d) }
+                            )
                         }
                     }
                 }
@@ -194,6 +213,53 @@ fun SettingsScreen(vm: SettingsViewModel = viewModel()) {
                             ) {
                                 Text("Pair", color = NeuColors.TextOnAccent)
                             }
+                        }
+                    }
+                }
+            }
+
+            // Auto-send toggle
+            NeuSectionHeader("Auto Send")
+            NeuCard {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                "Send automatically on copy",
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                            Text(
+                                "Sends clipboard to Mac as soon as you copy",
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                        Switch(
+                            checked = state.autoSendEnabled,
+                            onCheckedChange = { vm.setAutoSendEnabled(context, it) },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = NeuColors.Accent,
+                                checkedTrackColor = NeuColors.Accent.copy(alpha = 0.3f),
+                                uncheckedThumbColor = NeuColors.TextSecondary,
+                                uncheckedTrackColor = NeuColors.DarkShadow.copy(alpha = 0.3f),
+                            )
+                        )
+                    }
+                    // Accessibility Service only works on Android 11 (API 30) and below
+                    if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.R
+                        && state.autoSendEnabled
+                        && !isAccessibilityServiceEnabled(context)
+                    ) {
+                        NeuButton(
+                            onClick = {
+                                context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+                            },
+                            isAccent = true,
+                        ) {
+                            Text("Enable in Accessibility Settings", color = NeuColors.TextOnAccent)
                         }
                     }
                 }
@@ -246,44 +312,65 @@ fun SettingsScreen(vm: SettingsViewModel = viewModel()) {
                 }
             }
 
-            // Auto-send toggle (requires Accessibility Service enabled by user)
-            NeuSectionHeader("Auto Send")
+            // Clipboard access method (Shizuku)
+            NeuSectionHeader("Clipboard Access")
             NeuCard {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(
-                                "Send automatically on copy",
-                                style = MaterialTheme.typography.titleMedium,
-                            )
-                            Text(
-                                "Sends clipboard to Mac as soon as you copy",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
-                        Switch(
-                            checked = state.autoSendEnabled,
-                            onCheckedChange = { vm.setAutoSendEnabled(context, it) },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = NeuColors.Accent,
-                                checkedTrackColor = NeuColors.Accent.copy(alpha = 0.3f),
-                                uncheckedThumbColor = NeuColors.TextSecondary,
-                                uncheckedTrackColor = NeuColors.DarkShadow.copy(alpha = 0.3f),
-                            )
-                        )
+                    val canUseAccessibility = Build.VERSION.SDK_INT <= Build.VERSION_CODES.R
+                    val methodLabel = when (state.shizukuState) {
+                        "ready" -> "Shizuku (recommended)"
+                        else -> if (canUseAccessibility && isAccessibilityServiceEnabled(context))
+                            "Accessibility Service" else "Clipboard listener"
                     }
-                    if (state.autoSendEnabled && !isAccessibilityServiceEnabled(context)) {
-                        NeuButton(
-                            onClick = {
-                                context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-                            },
-                            isAccent = true,
-                        ) {
-                            Text("Enable in Accessibility Settings", color = NeuColors.TextOnAccent)
+                    val methodDescription = when (state.shizukuState) {
+                        "ready" -> "Clipboard access via Shizuku"
+                        "not_installed" -> "Install Shizuku for better clipboard access"
+                        "not_running" -> "Shizuku is installed but not running. Start it via ADB or root"
+                        "no_permission" -> "Shizuku is running but ClipSync needs permission"
+                        else -> "Checking Shizuku status..."
+                    }
+
+                    NeuStatusBadge(
+                        label = methodLabel,
+                        color = if (state.shizukuState == "ready") NeuColors.Connected
+                                else NeuColors.TextSecondary
+                    )
+                    Text(
+                        methodDescription,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+
+                    when (state.shizukuState) {
+                        "not_installed" -> {
+                            NeuButton(
+                                onClick = {
+                                    context.startActivity(
+                                        Intent(
+                                            Intent.ACTION_VIEW,
+                                            Uri.parse("https://github.com/RikkaApps/Shizuku/releases/latest")
+                                        )
+                                    )
+                                },
+                                isAccent = true,
+                            ) {
+                                Text("Install Shizuku", color = NeuColors.TextOnAccent)
+                            }
+                        }
+                        "no_permission" -> {
+                            NeuButton(
+                                onClick = { vm.requestShizukuPermission() },
+                                isAccent = true,
+                            ) {
+                                Text("Grant Shizuku permission", color = NeuColors.TextOnAccent)
+                            }
+                        }
+                        "ready" -> {
+                            NeuButton(
+                                onClick = { vm.stopShizukuListener(context) },
+                                isAccent = false,
+                            ) {
+                                Text("Stop Shizuku Listener", color = NeuColors.Error)
+                            }
                         }
                     }
                 }
@@ -338,20 +425,20 @@ private fun statusTitle(status: ConnectionStatus): String = when (status) {
     ConnectionStatus.Disconnected -> "Disconnected"
     ConnectionStatus.Connecting -> "Connecting…"
     is ConnectionStatus.Connected -> "Connected"
-    is ConnectionStatus.Paused -> "Paused"
+    is ConnectionStatus.Paused -> "Disconnected"
     is ConnectionStatus.Error -> "Error"
 }
 
-private fun statusSubtitle(status: ConnectionStatus): String = when (status) {
-    ConnectionStatus.Disconnected -> "Pair with a Mac to start syncing"
+private fun statusSubtitle(status: ConnectionStatus, hasPairing: Boolean = false): String = when (status) {
+    ConnectionStatus.Disconnected -> if (hasPairing) "Sync stopped" else "Pair with a Mac to start syncing"
     ConnectionStatus.Connecting -> "Establishing connection…"
     is ConnectionStatus.Connected -> status.host
-    is ConnectionStatus.Paused -> status.host
+    is ConnectionStatus.Paused -> "Sync stopped"
     is ConnectionStatus.Error -> status.reason
 }
 
 @Composable
-private fun DiscoveredServerCard(d: Discovered, onPair: () -> Unit) {
+private fun DiscoveredServerCard(d: Discovered, isPaired: Boolean, onPair: () -> Unit) {
     NeuCard {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -365,8 +452,12 @@ private fun DiscoveredServerCard(d: Discovered, onPair: () -> Unit) {
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
-            NeuButton(onClick = onPair, isAccent = true) {
-                Text("Pair", color = NeuColors.TextOnAccent)
+            if (isPaired) {
+                NeuStatusBadge(label = "Connected", color = NeuColors.Connected)
+            } else {
+                NeuButton(onClick = onPair, isAccent = true) {
+                    Text("Pair", color = NeuColors.TextOnAccent)
+                }
             }
         }
     }

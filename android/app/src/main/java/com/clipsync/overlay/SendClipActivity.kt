@@ -40,8 +40,8 @@ class SendClipActivity : Activity() {
     private val sender = ClipSender()
     private val handler = Handler(Looper.getMainLooper())
 
-    // Guard to ensure we only attempt the send once per launch.
     private var clipboardAttempted = false
+    private var isAutoSend = false
 
     private val fallbackRunnable = Runnable {
         if (!clipboardAttempted) {
@@ -52,6 +52,8 @@ class SendClipActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        isAutoSend = intent.getBooleanExtra(EXTRA_AUTO_SEND, false)
 
         // A real (transparent) content view is required so the window is
         // properly registered in WindowManager and can receive input focus.
@@ -183,6 +185,7 @@ class SendClipActivity : Activity() {
         private const val TAG = "ClipSync/Send"
         const val ACTION_SEND_RESULT = "com.clipsync.action.SEND_RESULT"
         const val EXTRA_SUCCESS = "success"
+        const val EXTRA_AUTO_SEND = "auto_send"
 
         fun intent(context: Context): Intent {
             return Intent(context, SendClipActivity::class.java).apply {
