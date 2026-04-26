@@ -139,7 +139,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     code: session.code,
                     expiresAt: session.expiresAt,
                     hostname: hostname,
-                    port: ServerConfig.default.port
+                    port: ServerConfig.default.port,
+                    onRefresh: { [weak self] in
+                        guard let self else { return nil }
+                        return try? await self.pairing.startPairing()
+                    }
                 )
             } catch {
                 logger.error("Failed to start pairing: \(error)")

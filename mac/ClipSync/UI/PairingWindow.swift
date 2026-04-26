@@ -5,13 +5,24 @@ import Foundation
 import SwiftUI
 
 struct PairingView: View {
-    let code: String
-    let expiresAt: Date
+    @State private var code: String
+    @State private var expiresAt: Date
     let hostname: String
     let port: Int
+    let onRefresh: () async -> PairingSession?
 
     @State private var remaining: TimeInterval = 0
     @State private var cachedQRImage: NSImage?
+    @State private var isRefreshing = false
+
+    init(code: String, expiresAt: Date, hostname: String, port: Int,
+         onRefresh: @escaping () async -> PairingSession?) {
+        self._code = State(initialValue: code)
+        self._expiresAt = State(initialValue: expiresAt)
+        self.hostname = hostname
+        self.port = port
+        self.onRefresh = onRefresh
+    }
 
     var body: some View {
         VStack(spacing: 20) {
@@ -26,16 +37,24 @@ struct PairingView: View {
                     .resizable()
                     .frame(width: 220, height: 220)
             }
-            Text(String(format: "Expires in %d:%02d", Int(remaining) / 60, Int(remaining) % 60))
+            Text(remaining > 0
+                 ? String(format: "Expires in %d:%02d", Int(remaining) / 60, Int(remaining) % 60)
+                 : "Expired")
                 .font(.system(.title3, design: .monospaced))
                 .foregroundStyle(remaining <= 30 ? .red : .secondary)
             Text(pairingURL)
                 .font(.caption.monospaced())
                 .foregroundStyle(.secondary)
                 .textSelection(.enabled)
+            Button {
+                Task { await refresh() }
+            } label: {
+                Label("New Code", systemImage: "arrow.clockwise")
+            }
+            .disabled(isRefreshing)
         }
         .padding(28)
-        .frame(width: 380, height: 460)
+        .frame(width: 380, height: 510)
         .onAppear {
             cachedQRImage = Self.generateQRImage(for: pairingURL)
             updateRemaining()
@@ -43,6 +62,16 @@ struct PairingView: View {
         .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { _ in
             updateRemaining()
         }
+    }
+
+    private func refresh() async {
+        isRefreshing = true
+        defer { isRefreshing = false }
+        guard let session = await onRefresh() else { return }
+        code = session.code
+        expiresAt = session.expiresAt
+        cachedQRImage = Self.generateQRImage(for: pairingURL)
+        updateRemaining()
     }
 
     private var formattedCode: String {
@@ -75,20 +104,28 @@ struct PairingView: View {
 @MainActor
 final class PairingWindowController {
     private var window: NSWindow?
+    private var shownCode: String?
 
-    private static let windowSize = NSSize(width: 380, height: 460)
+    private static let windowSize = NSSize(width: 380, height: 510)
 
-    func show(code: String, expiresAt: Date, hostname: String, port: Int) {
-        if let window {
+    func show(code: String, expiresAt: Date, hostname: String, port: Int,
+              onRefresh: @escaping () async -> PairingSession?) {
+        if let window, shownCode == code {
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
         }
+        // Code changed (new session) — close stale window and open fresh one.
+        window?.close()
+        window = nil
+        shownCode = code
+
         let view = PairingView(
             code: code,
             expiresAt: expiresAt,
             hostname: hostname,
-            port: port
+            port: port,
+            onRefresh: onRefresh
         )
         let hosting = NSHostingController(rootView: view)
         hosting.sizingOptions = []
@@ -108,5 +145,6 @@ final class PairingWindowController {
     func close() {
         window?.close()
         window = nil
+        shownCode = nil
     }
 }
