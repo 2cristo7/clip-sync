@@ -27,16 +27,16 @@ import android.widget.ImageView
 import com.clipsync.app.R
 
 /**
- * Manages a floating overlay FAB that appears when the user copies something
- * to the clipboard. The FAB is rendered via [WindowManager] with
- * [WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY] and requires the
- * `SYSTEM_ALERT_WINDOW` permission.
+ * Manages floating overlay views rendered via [WindowManager].
+ * Requires `SYSTEM_ALERT_WINDOW` permission.
  *
- * Lifecycle:
- *  1. [showFab] — called by the clipboard-changed listener in the foreground
- *     service. Adds the view in ~16-32ms.
- *  2. User taps → launches [SendClipActivity] trampoline.
- *  3. Auto-dismiss after [AUTO_DISMISS_MS] if untouched.
+ * ## Active feature
+ * [showUploadIndicator] / [hideUploadIndicator] — standalone spinner shown
+ * while a screenshot is being uploaded. No user interaction needed.
+ *
+ * ## LEGACY feature (kept for reference, not shown in Settings)
+ * [showFab] / [dismiss] — send-to-Mac floating button that appeared when
+ * the user copied something. Now superseded by Shizuku auto-send.
  */
 class ClipOverlayManager(private val context: Context) {
 
@@ -46,6 +46,8 @@ class ClipOverlayManager(private val context: Context) {
 
     private var spinnerView: View? = null
     private var isLoading = false
+    // True when the FAB was created solely to host the upload spinner (no send button role)
+    private var isStandaloneFab = false
 
     private val resultReceiver = object : BroadcastReceiver() {
         override fun onReceive(ctx: Context?, intent: Intent?) {
@@ -67,6 +69,7 @@ class ClipOverlayManager(private val context: Context) {
 
     private var receiverRegistered = false
 
+    // LEGACY: send-to-Mac FAB. Superseded by Shizuku auto-send; kept for reference.
     fun showFab() {
         // Must be called on the main thread.
         if (fabView != null) return
@@ -109,20 +112,7 @@ class ClipOverlayManager(private val context: Context) {
             return
         }
 
-        // Register for send results and loading state
-        if (!receiverRegistered) {
-            val filter = IntentFilter().apply {
-                addAction(SendClipActivity.ACTION_SEND_RESULT)
-                addAction(ACTION_SHOW_LOADING)
-                addAction(ACTION_HIDE_LOADING)
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                context.registerReceiver(resultReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
-            } else {
-                context.registerReceiver(resultReceiver, filter)
-            }
-            receiverRegistered = true
-        }
+        ensureReceiverRegistered()
 
         // Entrance animation: fade to semi-transparent + overshoot scale
         view.alpha = 0f
@@ -154,11 +144,105 @@ class ClipOverlayManager(private val context: Context) {
     }
 
     fun destroy() {
+        dismissUploadIndicator()
+        // LEGACY: also dismiss send FAB if showing
         dismiss()
         if (receiverRegistered) {
             try { context.unregisterReceiver(resultReceiver) } catch (_: Exception) { }
             receiverRegistered = false
         }
+    }
+
+    // -------------------------------------------------------------------------
+    // Upload indicator — shown while a screenshot is being sent to Mac
+    // -------------------------------------------------------------------------
+
+    fun showUploadIndicator() {
+        if (!Settings.canDrawOverlays(context)) {
+            L.verbose(M, "SYSTEM_ALERT_WINDOW not granted — skipping upload indicator")
+            return
+        }
+        if (isLoading) return
+        // If the legacy send FAB happens to be visible, reuse it
+        if (fabView != null) {
+            showLoading()
+            return
+        }
+        // Create a standalone non-interactive spinner FAB
+        isStandaloneFab = true
+        ensureReceiverRegistered()
+        val size = dpToPx(56)
+        val params = WindowManager.LayoutParams(
+            size, size,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+                or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.END
+            x = dpToPx(16)
+            y = dpToPx(80)
+        }
+        val view = buildFabView(size)
+        // Not clickable in upload-indicator mode
+        view.setOnClickListener(null)
+        view.isClickable = false
+        try {
+            wm.addView(view, params)
+            fabView = view
+        } catch (e: Exception) {
+            L.error(M, "Failed to add upload indicator: ${e.message}")
+            isStandaloneFab = false
+            return
+        }
+        view.alpha = 0f
+        view.scaleX = 0.5f
+        view.scaleY = 0.5f
+        view.animate()
+            .alpha(1f).scaleX(1f).scaleY(1f)
+            .setDuration(180)
+            .setInterpolator(OvershootInterpolator(2f))
+            .withEndAction { showLoading() }
+            .start()
+        L.event(M, "upload indicator shown")
+    }
+
+    fun hideUploadIndicator(success: Boolean) {
+        if (!isLoading && fabView == null) return
+        hideLoading()
+        if (success) showSuccessFeedback() else showErrorFeedback()
+        if (isStandaloneFab) {
+            // Auto-dismiss after feedback delay
+            handler.postDelayed({
+                dismiss()
+                isStandaloneFab = false
+            }, 1_200)
+        }
+        L.event(M, "upload indicator hidden success=$success")
+    }
+
+    private fun dismissUploadIndicator() {
+        if (isStandaloneFab) {
+            isStandaloneFab = false
+            isLoading = false
+            dismiss()
+        }
+    }
+
+    private fun ensureReceiverRegistered() {
+        if (receiverRegistered) return
+        val filter = IntentFilter().apply {
+            addAction(SendClipActivity.ACTION_SEND_RESULT)
+            addAction(ACTION_SHOW_LOADING)
+            addAction(ACTION_HIDE_LOADING)
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(resultReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            context.registerReceiver(resultReceiver, filter)
+        }
+        receiverRegistered = true
     }
 
     private fun showSuccessFeedback() {

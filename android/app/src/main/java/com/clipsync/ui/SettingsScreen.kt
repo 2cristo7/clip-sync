@@ -38,6 +38,9 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -336,9 +339,7 @@ fun SettingsScreen(
                         "Automatically sends screenshots to Mac when you take them",
                         style = MaterialTheme.typography.bodySmall,
                     )
-                    if (state.mediaPermissionGranted) {
-                        NeuStatusBadge(label = "Permission granted", color = NeuColors.Connected)
-                    } else {
+                    if (!state.mediaPermissionGranted) {
                         NeuButton(
                             onClick = {
                                 val perm = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
@@ -351,56 +352,52 @@ fun SettingsScreen(
                         ) {
                             Text("Grant media access", color = NeuColors.TextOnAccent)
                         }
+                    } else {
+                        NeuStatusBadge(label = "Media access granted", color = NeuColors.Connected)
+                    }
+                    // Overlay permission needed for the upload progress indicator
+                    if (!state.overlayPermissionGranted) {
+                        NeuButton(
+                            onClick = {
+                                context.startActivity(
+                                    Intent(
+                                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                        Uri.parse("package:${context.packageName}")
+                                    )
+                                )
+                            },
+                            isAccent = false,
+                        ) {
+                            Text("Grant overlay for upload indicator", color = NeuColors.TextSecondary)
+                        }
+                    } else {
+                        NeuStatusBadge(label = "Upload indicator ready", color = NeuColors.Connected)
                     }
                 }
             }
 
-            // Overlay toggle
+            // LEGACY: Send-to-Mac FAB — superseded by Shizuku auto-send.
+            // Kept in code for reference; hidden from UI.
+            // To restore: uncomment the block below and re-add overlayEnabled toggle to SettingsState.
+            /*
             NeuSectionHeader("Clipboard Overlay")
             NeuCard {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
-                            Text(
-                                "Send to Mac FAB",
-                                style = MaterialTheme.typography.titleMedium,
-                            )
-                            Text(
-                                "Shows a floating button when you copy something",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
+                            Text("Send to Mac FAB", style = MaterialTheme.typography.titleMedium)
+                            Text("Shows a floating button when you copy something", style = MaterialTheme.typography.bodySmall)
                         }
-                        Switch(
-                            checked = state.overlayEnabled,
-                            onCheckedChange = { vm.setOverlayEnabled(context, it) },
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = NeuColors.Accent,
-                                checkedTrackColor = NeuColors.Accent.copy(alpha = 0.3f),
-                                uncheckedThumbColor = NeuColors.TextSecondary,
-                                uncheckedTrackColor = NeuColors.DarkShadow.copy(alpha = 0.3f),
-                            )
-                        )
+                        Switch(checked = state.overlayEnabled, onCheckedChange = { vm.setOverlayEnabled(context, it) }, colors = SwitchDefaults.colors(checkedThumbColor = NeuColors.Accent, checkedTrackColor = NeuColors.Accent.copy(alpha = 0.3f), uncheckedThumbColor = NeuColors.TextSecondary, uncheckedTrackColor = NeuColors.DarkShadow.copy(alpha = 0.3f)))
                     }
                     if (state.overlayEnabled && !state.overlayPermissionGranted) {
-                        NeuButton(
-                            onClick = {
-                                val intent = Intent(
-                                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                    Uri.parse("package:${context.packageName}")
-                                )
-                                context.startActivity(intent)
-                            },
-                            isAccent = true,
-                        ) {
+                        NeuButton(onClick = { context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}"))) }, isAccent = true) {
                             Text("Grant overlay permission", color = NeuColors.TextOnAccent)
                         }
                     }
                 }
             }
+            */
 
             // Clipboard access method (Shizuku)
             NeuSectionHeader("Clipboard Access")
@@ -574,6 +571,8 @@ private fun PairingCodeDialog(
     onConfirm: (String) -> Unit
 ) {
     var code by remember { mutableStateOf("") }
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
     val hostLabel = when (target) {
         is PairingTarget.Auto -> "${target.discovered.host}:${target.discovered.port}"
         is PairingTarget.Manual -> "${target.host}:${target.port}"
@@ -600,11 +599,12 @@ private fun PairingCodeDialog(
                     label = { Text("6-digit code") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+                    keyboardActions = KeyboardActions(onDone = { if (code.length == 6) onConfirm(code) }),
                     textStyle = MaterialTheme.typography.headlineMedium.copy(
                         letterSpacing = 8.sp,
                         fontWeight = FontWeight.Bold,
                     ),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth().focusRequester(focusRequester)
                 )
             }
         },

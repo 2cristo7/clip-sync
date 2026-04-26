@@ -142,7 +142,7 @@ class ClipForegroundService : Service() {
         screenshotObserver = ScreenshotObserver(this, handler) { _, mime, bytes ->
             if (!prefs.autoSendEnabled || !prefs.syncEnabled) return@ScreenshotObserver
             L.event(M, "screenshot auto-send mime=$mime bytes=${bytes.size}")
-            broadcastLoading(show = true)
+            overlayManager?.showUploadIndicator()
             val payload = ClipPayloadBuilder.image(mime, bytes)
             sendPayloadToMac(payload)
         }
@@ -422,7 +422,8 @@ class ClipForegroundService : Service() {
         Thread {
             val result = sender.send(host, port, token, secret, fp, payload)
             L.event(M, "auto-send result=$result type=${payload.type}")
-            handler.post { broadcastLoading(show = false, success = result is ClipSender.Result.Ok) }
+            val ok = result is ClipSender.Result.Ok
+            handler.post { overlayManager?.hideUploadIndicator(ok) }
         }.start()
     }
 
