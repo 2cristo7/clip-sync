@@ -56,11 +56,16 @@ class SettingsViewModel : ViewModel() {
         try {
             val prefs = Prefs(context)
             val paired = prefs.hasPairing()
+            val overlayGranted = Settings.canDrawOverlays(context)
+
+            if (overlayGranted) Log.i(TAG, "permission=overlay already_granted=true")
+            if (paired) Log.i(TAG, "bootstrap hasPairing=true host=${prefs.host} syncEnabled=${prefs.syncEnabled}")
+            else Log.i(TAG, "bootstrap hasPairing=false")
 
             _state.value = _state.value.copy(
                 mode = prefs.mode,
                 overlayEnabled = prefs.overlayEnabled,
-                overlayPermissionGranted = Settings.canDrawOverlays(context),
+                overlayPermissionGranted = overlayGranted,
                 syncEnabled = prefs.syncEnabled,
                 autoSendEnabled = prefs.autoSendEnabled,
                 hasPairing = paired,
@@ -147,6 +152,8 @@ class SettingsViewModel : ViewModel() {
         discoveryJob = viewModelScope.launch(Dispatchers.IO) {
             try {
                 nsd.discover().collect { d ->
+                    val isNew = _state.value.discovered.none { it.name == d.name }
+                    if (isNew) Log.i(TAG, "discovery found name=${d.name} host=${d.host}:${d.port}")
                     val merged = (_state.value.discovered + d).distinctBy { it.name }
                     _state.value = _state.value.copy(discovered = merged)
                 }
@@ -249,6 +256,8 @@ class SettingsViewModel : ViewModel() {
         } else {
             "ready"
         }
+        val prev = _state.value.shizukuState
+        if (state != prev) Log.i(TAG, "permission=shizuku state=$state prev=$prev")
         _state.value = _state.value.copy(shizukuState = state)
     }
 

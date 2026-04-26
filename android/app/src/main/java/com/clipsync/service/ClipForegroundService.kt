@@ -45,6 +45,7 @@ class ClipForegroundService : Service() {
     private lateinit var imageCache: ImageCache
     private lateinit var incomingNotifier: IncomingClipNotifier
     private var ws: WebSocket? = null
+    @Volatile private var wsGeneration = 0   // incremented on each connect(); stale callbacks are ignored
     private var backoffMs: Long = INITIAL_BACKOFF_MS
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
     private val reconnectRunnable = Runnable { connect() }
@@ -173,6 +174,7 @@ class ClipForegroundService : Service() {
         shizukuManager?.destroy()
         shizukuManager = null
         handler.removeCallbacks(reconnectRunnable)
+        wsGeneration++  // invalidate any in-flight callbacks
         ws?.cancel()
         ws = null
         super.onDestroy()
@@ -183,18 +185,26 @@ class ClipForegroundService : Service() {
         val fp = prefs.fp ?: return
         val host = prefs.host ?: return
         val port = prefs.port
-        // Cancel any existing WebSocket before opening a new one to prevent
-        // duplicate connections that cause every frame to be processed N times.
+        // Bump generation so callbacks from any previous WebSocket are ignored.
+        // This prevents the cancel-triggers-onFailure-triggers-reconnect loop and
+        // also prevents duplicate connections from multiple calls to connect().
+        wsGeneration++
+        val gen = wsGeneration
         ws?.cancel()
         ws = null
         updateNotification("Connecting to $host...")
         val okClient = client.pinnedClient(host, fp)
         ws = client.connectWebSocket(okClient, host, port, token,
-            onFrame = { payload -> onFrame(payload) },
+            onFrame = { payload ->
+                if (gen != wsGeneration) return@connectWebSocket
+                onFrame(payload)
+            },
             onStatus = { status ->
+                if (gen != wsGeneration) return@connectWebSocket  // stale callback
                 when (status) {
                     is ClipClient.WsStatus.Open -> {
                         backoffMs = INITIAL_BACKOFF_MS
+                        Log.i(TAG, "ws=connected host=$host")
                         updateNotification("Connected ($host)")
                         handler.post {
                             if (prefs.overlayEnabled) overlayManager?.showFab()
@@ -203,6 +213,7 @@ class ClipForegroundService : Service() {
                         }
                     }
                     is ClipClient.WsStatus.Closed -> {
+                        Log.i(TAG, "ws=closed host=$host code=${status.code}")
                         updateNotification("Disconnected")
                         handler.post {
                             overlayManager?.dismiss()
@@ -212,6 +223,7 @@ class ClipForegroundService : Service() {
                         scheduleReconnect()
                     }
                     is ClipClient.WsStatus.Error -> {
+                        Log.w(TAG, "ws=error host=$host msg=${status.message}")
                         updateNotification("Error: ${status.message}")
                         handler.post {
                             overlayManager?.dismiss()
