@@ -5,11 +5,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import android.text.TextUtils
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -106,12 +102,48 @@ fun SettingsScreen(
     }
 
     val shizukuReady = state.shizukuState == "ready"
-    // Step 0: Shizuku not installed → blocking install modal
-    val showInstallModal = state.shizukuState == "not_installed"
+    // Step 0a: On mobile data + Tailscale not installed → suggest Tailscale
+    val showTailscaleModal = state.isOnMobileData
+            && state.tailscaleState is TailscaleState.NotInstalled
+            && !state.hasPairing
+    // Step 0b: Shizuku not installed → blocking install modal
+    val showInstallModal = !showTailscaleModal && state.shizukuState == "not_installed"
     // Step 1: Permissions modal — Media access + Shizuku both required
-    val showPermissionsModal = !showInstallModal && (!state.mediaPermissionGranted || !shizukuReady)
+    val showPermissionsModal = !showTailscaleModal && !showInstallModal && (!state.mediaPermissionGranted || !shizukuReady)
 
-    // Modal 0 — Download & install Shizuku (blocking)
+    // Modal 0a — Tailscale not installed while on mobile data
+    var tailscaleDismissed by rememberSaveable { mutableStateOf(false) }
+    if (showTailscaleModal && !tailscaleDismissed) {
+        AlertDialog(
+                onDismissRequest = { tailscaleDismissed = true },
+                containerColor = NeuColors.SurfaceRaised,
+                title = { Text("Setup Tailscale", style = MaterialTheme.typography.headlineMedium) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(
+                            "You're on mobile data. To sync with your Mac from outside your home WiFi, install Tailscale on both devices.",
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        Text(
+                            "Tailscale is free and creates a secure network between your devices.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                },
+                confirmButton = {
+                    NeuButton(onClick = { vm.openTailscalePlayStore(context) }, isAccent = true) {
+                        Text("Install Tailscale", color = NeuColors.TextOnAccent)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { tailscaleDismissed = true }) {
+                        Text("Skip", color = NeuColors.TextSecondary)
+                    }
+                },
+            )
+    }
+
+    // Modal 0b — Download & install Shizuku (blocking)
     if (showInstallModal) {
         val install = state.shizukuInstall
         AlertDialog(
@@ -341,12 +373,11 @@ fun SettingsScreen(
             )
 
             // Discovery / Manual section
-            AnimatedVisibility(
-                visible = state.mode == Prefs.MODE_AUTO,
-                enter = fadeIn() + expandVertically(clip = false),
-                exit = fadeOut() + shrinkVertically(clip = false)
+            Column(
+                modifier = Modifier.animateContentSize(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (state.mode == Prefs.MODE_AUTO) {
                     NeuSectionHeader("Discovered Servers")
                     if (state.discovered.isEmpty()) {
                         NeuCard {
@@ -373,44 +404,122 @@ fun SettingsScreen(
                             )
                         }
                     }
+                } else {
+                    NeuSectionHeader("Manual Connection")
+                    if (state.hasPairing && state.mode == Prefs.MODE_MANUAL) {
+                        val isActive = state.status is ConnectionStatus.Connected ||
+                            state.status is ConnectionStatus.Connecting
+                        NeuCard {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        state.pairedHost ?: "Manual",
+                                        style = MaterialTheme.typography.titleMedium,
+                                    )
+                                    Text(
+                                        "${state.pairedHost}:${state.pairedPort}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                    )
+                                }
+                                if (isActive) {
+                                    NeuStatusBadge(label = "Connected", color = NeuColors.Connected)
+                                } else {
+                                    NeuButton(onClick = { vm.unpair(context) }, isAccent = false) {
+                                        Text("Unpair", color = NeuColors.Error)
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        val hostTrimmed = manualHost.trim()
+                        val portNum = manualPort.toIntOrNull()
+                        val hostValid = hostTrimmed.isNotBlank() && hostTrimmed.matches(
+                            Regex("^[a-zA-Z0-9]([a-zA-Z0-9\\-\\.]*[a-zA-Z0-9])?\$")
+                        )
+                        val portValid = portNum != null && portNum in 1..65535
+                        NeuCard {
+                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                OutlinedTextField(
+                                    value = manualHost,
+                                    onValueChange = { manualHost = it },
+                                    label = { Text("Host / IP") },
+                                    singleLine = true,
+                                    isError = manualHost.isNotEmpty() && !hostValid,
+                                    supportingText = if (manualHost.isNotEmpty() && !hostValid) {
+                                        { Text("Enter a valid IP or hostname") }
+                                    } else null,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                OutlinedTextField(
+                                    value = manualPort,
+                                    onValueChange = { manualPort = it.filter { c -> c.isDigit() }.take(5) },
+                                    label = { Text("Port") },
+                                    singleLine = true,
+                                    isError = manualPort.isNotEmpty() && !portValid,
+                                    supportingText = if (manualPort.isNotEmpty() && !portValid) {
+                                        { Text("Port must be 1–65535") }
+                                    } else null,
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                NeuButton(
+                                    onClick = {
+                                        pairingTarget = PairingTarget.Manual(
+                                            host = hostTrimmed,
+                                            port = portNum ?: 7010
+                                        )
+                                    },
+                                    enabled = hostValid && portValid,
+                                    isAccent = true,
+                                ) {
+                                    Text("Pair", color = NeuColors.TextOnAccent)
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
-            AnimatedVisibility(
-                visible = state.mode == Prefs.MODE_MANUAL,
-                enter = fadeIn() + expandVertically(clip = false),
-                exit = fadeOut() + shrinkVertically(clip = false)
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    NeuSectionHeader("Manual Connection")
-                    NeuCard {
-                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            OutlinedTextField(
-                                value = manualHost,
-                                onValueChange = { manualHost = it },
-                                label = { Text("Host / IP") },
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                            OutlinedTextField(
-                                value = manualPort,
-                                onValueChange = { manualPort = it.filter { c -> c.isDigit() }.take(5) },
-                                label = { Text("Port") },
-                                singleLine = true,
-                                modifier = Modifier.fillMaxWidth()
-                            )
+            // Tailscale status
+            if (state.tailscaleState is TailscaleState.Installed) {
+                NeuSectionHeader("Tailscale")
+                NeuCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        NeuStatusBadge(label = "Tailscale installed", color = NeuColors.Connected)
+                        Text(
+                            "You can pair with your Mac using its Tailscale IP from anywhere.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        if (state.mode != Prefs.MODE_MANUAL) {
                             NeuButton(
-                                onClick = {
-                                    pairingTarget = PairingTarget.Manual(
-                                        host = manualHost.trim(),
-                                        port = manualPort.toIntOrNull() ?: 7010
-                                    )
-                                },
-                                enabled = manualHost.isNotBlank() && manualPort.isNotBlank(),
+                                onClick = { vm.setMode(Prefs.MODE_MANUAL) },
                                 isAccent = true,
+                                modifier = Modifier.fillMaxWidth(),
                             ) {
-                                Text("Pair", color = NeuColors.TextOnAccent)
+                                Text("Switch to Manual IP", color = NeuColors.TextOnAccent)
                             }
+                        }
+                    }
+                }
+            } else if (state.tailscaleState is TailscaleState.NotInstalled && state.isOnMobileData) {
+                NeuSectionHeader("Tailscale")
+                NeuCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        NeuStatusBadge(label = "Not installed", color = NeuColors.TextSecondary)
+                        Text(
+                            "Install Tailscale to sync from anywhere, not just your home WiFi.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        NeuButton(
+                            onClick = { vm.openTailscalePlayStore(context) },
+                            isAccent = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text("Install Tailscale", color = NeuColors.TextOnAccent)
                         }
                     }
                 }
@@ -712,6 +821,9 @@ private fun PairingCodeDialog(
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                     keyboardActions = KeyboardActions(onDone = { if (code.length == 6) onConfirm(code) }),
+                    supportingText = {
+                        Text("${code.length}/6 digits")
+                    },
                     textStyle = MaterialTheme.typography.headlineMedium.copy(
                         letterSpacing = 8.sp,
                         fontWeight = FontWeight.Bold,
