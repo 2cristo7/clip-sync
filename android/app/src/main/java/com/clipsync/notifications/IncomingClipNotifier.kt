@@ -19,6 +19,7 @@ import androidx.core.content.ContextCompat
 import com.clipsync.app.R
 import com.clipsync.images.ImageCache
 import com.clipsync.model.ClipPayload
+import java.io.File
 
 /**
  * Builds and posts notifications for frames received from the Mac.
@@ -101,18 +102,33 @@ class IncomingClipNotifier(
     private fun buildImageNotification(payload: ClipPayload): NotificationCompat.Builder {
         val bytes = Base64.decode(payload.data, Base64.DEFAULT)
         val ext = extensionForMime(payload.mime)
-        val uri: Uri = imageCache.writeImage(bytes, ext)
+        // Write file first so we have the path for the "Save to gallery" action.
+        val imageFile: File = imageCache.writeToFile(bytes, ext)
+        val uri: Uri = androidx.core.content.FileProvider.getUriForFile(
+            context, ImageCache.AUTHORITY, imageFile
+        )
         val bitmap: Bitmap? = try {
             BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
         } catch (t: Throwable) {
             L.warn(M, "decodeByteArray failed: ${t.message}")
             null
         }
-        val intent = ApplyClipActivity.imageIntent(context, uri, payload.mime, payload.nonce)
-        val pi = PendingIntent.getActivity(
+        val tapIntent = ApplyClipActivity.imageIntent(context, uri, payload.mime, payload.nonce)
+        val tapPi = PendingIntent.getActivity(
             context,
             pendingRequestCode(payload),
-            intent,
+            tapIntent,
+            pendingFlags()
+        )
+        val saveIntent = Intent(context, SaveToGalleryReceiver::class.java).apply {
+            action = SaveToGalleryReceiver.ACTION
+            putExtra(SaveToGalleryReceiver.EXTRA_FILE_PATH, imageFile.absolutePath)
+            putExtra(SaveToGalleryReceiver.EXTRA_MIME, payload.mime)
+        }
+        val savePi = PendingIntent.getBroadcast(
+            context,
+            imageFile.absolutePath.hashCode(),
+            saveIntent,
             pendingFlags()
         )
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
@@ -121,7 +137,8 @@ class IncomingClipNotifier(
             .setContentText(payload.mime)
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setAutoCancel(true)
-            .setContentIntent(pi)
+            .setContentIntent(tapPi)
+            .addAction(0, context.getString(R.string.action_save_to_gallery), savePi)
         if (bitmap != null) {
             builder.setLargeIcon(bitmap)
             builder.setStyle(
@@ -152,11 +169,13 @@ class IncomingClipNotifier(
     private fun pendingRequestCode(payload: ClipPayload): Int =
         (payload.nonce.hashCode() xor payload.ts.toInt())
 
-    private fun notifIdFor(@Suppress("UNUSED_PARAMETER") payload: ClipPayload): Int = NOTIF_ID
+    private fun notifIdFor(payload: ClipPayload): Int =
+        if (payload.type == "image") NOTIF_ID_IMAGE else NOTIF_ID_TEXT
 
     companion object {
         const val CHANNEL_ID = "clipsync_incoming"
-        private const val NOTIF_ID = 4244   // fixed ID — each incoming clip replaces the previous
+        private const val NOTIF_ID_TEXT = 4244   // text notifications replace each other
+        const val NOTIF_ID_IMAGE = 4245          // image notifications replace each other (separate slot)
         private const val M = "Notif"
         private const val PREVIEW_MAX = 120
 

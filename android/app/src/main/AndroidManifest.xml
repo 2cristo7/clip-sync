@@ -11,6 +11,8 @@
         android:maxSdkVersion="32" />
     <uses-permission android:name="moe.shizuku.manager.permission.API_V23" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
 
     <application
         android:allowBackup="false"
@@ -81,6 +83,14 @@
             android:noHistory="true"
             android:taskAffinity=""
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <receiver
+            android:name="com.clipsync.notifications.SaveToGalleryReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.clipsync.action.SAVE_TO_GALLERY" />
+            </intent-filter>
+        </receiver>
 
         <provider
             android:name="androidx.core.content.FileProvider"

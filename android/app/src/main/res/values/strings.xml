@@ -4,4 +4,7 @@
     <string name="notif_channel_name">ClipSync Sync</string>
     <string name="notif_channel_desc">Keeps ClipSync connected in background</string>
     <string name="accessibility_service_description">ClipSync uses this service to detect when you copy something and send it automatically to your Mac. It does not read or analyse the content of your screens.</string>
+    <string name="action_save_to_gallery">Save to gallery</string>
+    <string name="saved_to_gallery">Image saved to gallery</string>
+    <string name="save_to_gallery_failed">Could not save image</string>
 </resources>
