@@ -53,10 +53,18 @@ final class PasteboardInjector: @unchecked Sendable {
                 throw PasteboardInjectionError.writeFailed
             }
         case .image:
-            let type = Self.pasteboardType(forMime: payload.mime)
-            guard let type else { throw PasteboardInjectionError.unsupportedMime(payload.mime) }
-            let imageData = Self.convertToPngIfNeeded(data: data, mime: payload.mime) ?? data
-            guard pasteboard.setData(imageData, forType: type) else {
+            // Always inject as PNG — universally supported by macOS pasteboard.
+            // toPng() handles JPEG, WebP, GIF, TIFF, BMP, and any format NSImage can decode.
+            let pngData: Data
+            if payload.mime.lowercased() == "image/png" {
+                pngData = data
+            } else {
+                guard let converted = Self.toPng(data) else {
+                    throw PasteboardInjectionError.unsupportedMime(payload.mime)
+                }
+                pngData = converted
+            }
+            guard pasteboard.setData(pngData, forType: .png) else {
                 throw PasteboardInjectionError.writeFailed
             }
         }
@@ -67,22 +75,12 @@ final class PasteboardInjector: @unchecked Sendable {
         ])
     }
 
-    private static func pasteboardType(forMime mime: String) -> NSPasteboard.PasteboardType? {
-        switch mime.lowercased() {
-        case "image/png": return .png
-        case "image/tiff": return .tiff
-        case "image/jpeg", "image/jpg": return .png  // JPEG data will be converted to PNG
-        default: return nil
-        }
-    }
-
-    /// Convert JPEG data to PNG for pasteboard injection.
-    /// NSPasteboard handles PNG natively; JPEG needs conversion.
-    private static func convertToPngIfNeeded(data: Data, mime: String) -> Data? {
-        let lower = mime.lowercased()
-        guard lower == "image/jpeg" || lower == "image/jpg" else { return data }
-        guard let image = NSImage(data: data) else { return nil }
-        guard let tiffRep = image.tiffRepresentation,
+    /// Convert any image data to PNG via NSImage. Handles JPEG, WebP, GIF,
+    /// TIFF, BMP — anything NSImage can decode. Returns nil only if NSImage
+    /// cannot parse the data at all.
+    private static func toPng(_ data: Data) -> Data? {
+        guard let image = NSImage(data: data),
+              let tiffRep = image.tiffRepresentation,
               let bitmap = NSBitmapImageRep(data: tiffRep),
               let pngData = bitmap.representation(using: .png, properties: [:]) else {
             return nil
