@@ -2,6 +2,8 @@
 
 Real-time clipboard synchronisation between macOS and Android over a local network or Tailscale.
 
+> **Migration in progress:** the macOS server is being rewritten from Swift to Rust for cross-platform support (macOS + Linux + Windows). The Swift code is archived in `mac-legacy/`; the new server lives in `rust/`. See `docs/development/cross-platform-plan.md` for the plan.
+
 ## What it does
 
 - **Text, bidirectional** — copy text on the Mac and it lands in the Android clipboard instantly, and vice versa.
@@ -57,22 +59,22 @@ Real-time clipboard synchronisation between macOS and Android over a local netwo
 
 See **[docs/installation.md](docs/installation.md)** for the full guide, including code-signing setup, Shizuku (for auto clipboard read), and Tailscale.
 
-**macOS — build & run**
+**macOS — build & run** *(legacy Swift server — being replaced by Rust)*
 
 ```bash
 # 1. Set up code signing (one-time)
-bash mac/scripts/setup-signing.sh
+bash mac-legacy/scripts/setup-signing.sh
 
 # 2. Build
 xcodebuild \
-  -project mac/ClipSync.xcodeproj \
+  -project mac-legacy/ClipSync.xcodeproj \
   -scheme ClipSync \
   -configuration Debug \
-  -derivedDataPath mac/build \
+  -derivedDataPath mac-legacy/build \
   build
 
 # 3. Launch
-open mac/build/Build/Products/Debug/ClipSync.app
+open mac-legacy/build/Build/Products/Debug/ClipSync.app
 ```
 
 **Android — build APK**
@@ -91,12 +93,13 @@ Sideload the APK via `adb install` or transfer to the device.
 
 ```
 clip-sync/
-├── mac/                          macOS Swift app (Xcode project)
+├── rust/                         Rust server (replacing Swift — WIP)
+│   ├── crates/clip-server/       main server crate
+│   └── tests/golden/             protocol golden test vectors
+├── mac-legacy/                   archived Swift server (v0.1.0)
 │   ├── ClipSync/                 source code (17 Swift files)
 │   ├── ClipSyncTests/            unit tests (35 tests)
 │   └── scripts/
-│       ├── setup-signing.sh      code-signing helper
-│       └── build-release.sh      release build
 ├── android/                      Android Kotlin app
 │   └── app/src/main/java/
 │       └── com/clipsync/         source code (22 Kotlin files)

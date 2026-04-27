@@ -55,7 +55,10 @@ The master agent:
 
 # Source File Structure (v0.1.0 + patches 22 Apr 2026)
 
-**Mac — 17 Swift files** (`mac/ClipSync/`):
+> **Rust migration in progress.** The Swift server in `mac-legacy/` is archived.
+> The new server lives in `rust/crates/clip-server/`. See `docs/development/cross-platform-plan.md`.
+
+**Mac (archived) — 17 Swift files** (`mac-legacy/ClipSync/`):
 `App`, `Clipboard/{ClipPayload,PasteboardInjector,PasteboardWatcher}`,
 `Network/{BonjourAdvertiser,ReachabilityMonitor}`,
 `Pairing/{PairingManager,TokenStore}`,
