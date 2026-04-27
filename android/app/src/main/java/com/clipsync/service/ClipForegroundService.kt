@@ -256,22 +256,17 @@ class ClipForegroundService : Service() {
             return
         }
 
-        // Images: always use ApplyClipActivity trampoline. Shizuku setClipboardUri
-        // fails silently because UID 2000 (shell) cannot grant FileProvider URI
-        // permissions on the system clipboard.
         if (payload.type == "image") {
             try {
                 val bytes = Base64.decode(payload.data, Base64.DEFAULT)
                 val ext = IncomingClipNotifier.extensionForMime(payload.mime)
                 val uri = imageCache.writeImage(bytes, ext)
                 ClipboardWriter.lastMacWriteMs = System.currentTimeMillis()
-                lastShizukuHash = uri.toString().hashCode()
-                startActivity(
-                    com.clipsync.notifications.ApplyClipActivity.imageIntent(
-                        this, uri, payload.mime, payload.nonce
-                    )
-                )
-                L.event(M, "launching ApplyClipActivity bytes=${bytes.size}")
+                ClipboardWriter.writeImage(this, uri, payload.mime)
+                shizukuManager?.let { mgr ->
+                    if (mgr.isAvailable()) lastShizukuHash = mgr.getClipboardHash()
+                }
+                L.event(M, "image clipboard write bytes=${bytes.size}")
             } catch (t: Throwable) {
                 L.warn(M, "Image clipboard write failed: ${t.message}")
             }
@@ -392,7 +387,10 @@ class ClipForegroundService : Service() {
         if (!prefs.autoSendEnabled || !prefs.syncEnabled || !prefs.hasPairing()) return
 
         val now = System.currentTimeMillis()
-        if (now - ClipboardWriter.lastMacWriteMs < 2_000) return  // echo suppression
+        if (now - ClipboardWriter.lastMacWriteMs < 2_000) {
+            lastShizukuHash = hash
+            return
+        }
         if (now - lastAutoSendMs < 1_000) return                  // debounce
 
         lastShizukuHash = hash
