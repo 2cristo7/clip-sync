@@ -29,6 +29,10 @@
         android:theme="@style/Theme.ClipSync"
         android:usesCleartextTraffic="false">
 
+        <meta-data
+            android:name="android.app.shortcuts"
+            android:resource="@xml/sharing_shortcuts" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -69,6 +73,7 @@
             android:name="com.clipsync.share.MacShareActivity"
             android:label="Mac"
             android:icon="@drawable/ic_mac_share"
+            android:roundIcon="@drawable/ic_mac_share"
             android:exported="true"
             android:excludeFromRecents="true"
             android:noHistory="true"
@@ -76,6 +81,7 @@
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="com.clipsync.category.SHARE_TARGET" />
                 <data android:mimeType="*/*" />
             </intent-filter>
             <intent-filter>

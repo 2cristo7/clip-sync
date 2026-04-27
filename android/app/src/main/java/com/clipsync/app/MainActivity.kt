@@ -1,6 +1,11 @@
 package com.clipsync.app
 
+import android.content.Intent
 import android.os.Bundle
+import androidx.core.content.pm.ShortcutInfoCompat
+import androidx.core.content.pm.ShortcutManagerCompat
+import androidx.core.graphics.drawable.IconCompat
+import com.clipsync.share.MacShareActivity
 import com.clipsync.util.L
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -18,6 +23,7 @@ import com.clipsync.storage.Prefs
 import com.clipsync.ui.SettingsScreen
 import com.clipsync.ui.theme.ClipSyncTheme
 import com.clipsync.ui.theme.NeuColors
+import com.clipsync.ui.theme.ThemeSwitchAnimator
 
 class MainActivity : ComponentActivity() {
     companion object { private const val M = "UI" }
@@ -34,6 +40,8 @@ class MainActivity : ComponentActivity() {
             ClipForegroundService.start(applicationContext)
         }
 
+        registerMacShareShortcut()
+
         val themePrefs = getSharedPreferences("clipsync_ui", MODE_PRIVATE)
         val initialDark = themePrefs.getBoolean("dark_mode", true)
 
@@ -47,20 +55,40 @@ class MainActivity : ComponentActivity() {
                 ) {
                     SettingsScreen(
                         isDark = isDark,
-                        onToggleTheme = {
-                            isDark = !isDark
-                            L.action(M, "toggleTheme isDark=$isDark")
-                            themePrefs.edit().putBoolean("dark_mode", isDark).apply()
-                            val style = if (isDark) SystemBarStyle.dark(darkScrim)
-                                else SystemBarStyle.light(darkScrim, darkScrim)
-                            enableEdgeToEdge(
-                                statusBarStyle = style,
-                                navigationBarStyle = style,
+                        onToggleTheme = { cx, cy ->
+                            ThemeSwitchAnimator.animateThemeSwitch(
+                                activity = this@MainActivity,
+                                cx = cx,
+                                cy = cy,
+                                onMidpoint = {
+                                    isDark = !isDark
+                                    L.action(M, "toggleTheme isDark=$isDark")
+                                    themePrefs.edit().putBoolean("dark_mode", isDark).apply()
+                                    val style = if (isDark) SystemBarStyle.dark(darkScrim)
+                                        else SystemBarStyle.light(darkScrim, darkScrim)
+                                    enableEdgeToEdge(
+                                        statusBarStyle = style,
+                                        navigationBarStyle = style,
+                                    )
+                                },
                             )
                         }
                     )
                 }
             }
         }
+    }
+
+    private fun registerMacShareShortcut() {
+        val shortcut = ShortcutInfoCompat.Builder(this, "mac_share_target")
+            .setShortLabel("Mac")
+            .setIcon(IconCompat.createWithResource(this, R.drawable.ic_mac_share))
+            .setIntent(
+                Intent(Intent.ACTION_SEND, null, this, MacShareActivity::class.java)
+            )
+            .setCategories(setOf("com.clipsync.category.SHARE_TARGET"))
+            .setLongLived(true)
+            .build()
+        ShortcutManagerCompat.pushDynamicShortcut(this, shortcut)
     }
 }
