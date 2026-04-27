@@ -103,7 +103,7 @@ class SettingsViewModel : ViewModel() {
                 pairedPort = prefs.port,
                 status = if (paired) ConnectionStatus.Connecting else ConnectionStatus.Disconnected
             )
-            if (prefs.mode == Prefs.MODE_AUTO) startDiscovery(context)
+            startDiscovery(context)
             refreshShizukuState(context)
             refreshTailscaleState(context)
             startNetworkWatch(context)
@@ -131,8 +131,7 @@ class SettingsViewModel : ViewModel() {
         L.action(M, "setMode mode=$mode")
         Prefs(context).mode = mode
         _state.value = _state.value.copy(mode = mode)
-        if (mode == Prefs.MODE_AUTO) startDiscovery(context)
-        else discoveryJob?.cancel()
+        if (discoveryJob?.isActive != true) startDiscovery(context)
     }
 
     fun setAutoSendEnabled(context: Context, enabled: Boolean) {
@@ -488,6 +487,7 @@ class SettingsViewModel : ViewModel() {
                         isOnMobileData = onMobile,
                         isTailscaleVpnActive = vpnActive,
                     )
+                    if (onWifi && !prev.isOnWifi) startDiscovery(context)
                 }
             }
         }
