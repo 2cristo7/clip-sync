@@ -1,13 +1,23 @@
-# Phase 0: Archive Swift Server & Extract Golden Tests
+# Phase 0: Archive Swift Server & Extract Golden Tests — COMPLETE
 ## Tasks
 - [x] 0.1 Create dev branch, extract golden test data
 - [x] 0.2 Archive Swift server (git mv mac/ mac-legacy/), update docs
 - [x] 0.3 Merge chore/archive-swift → dev
+
+---
+
+# Phase 1: Core Library (clipsync-core)
+## Tasks
+- [x] 1.1 Workspace + Core Skeleton
+- [x] 1.2 Protocol Types
+- [x] 1.3 HMAC Module
+- [x] 1.4 TLS Module
+- [x] 1.5 Pairing Logic
+- [x] 1.6 mDNS Module
+- [x] 1.7 Clipboard Abstraction
+- [x] 1.8 Core Tests
 ## Test Results
-N/A — no code to test, only file operations and golden data creation.
+62 tests passed (47 unit + 15 integration), 0 failed. Clippy clean.
 ## Notes
-- Golden test HMAC values computed with real HMAC-SHA256 via python3.
-- hmac_vector.json: secret=deadbeefcafebabe1234567890abcdef, sig=7267897e...
-- pair_response.json: sig=lze3X+4SqEIS7HWzJR6bFaezMziCynROKo7+p8QTM6M=
-- All 52 Swift files moved from mac/ to mac-legacy/ with git mv (history preserved).
-- CLAUDE.md and README.md updated to reflect mac-legacy/ paths and Rust migration.
+Branch: feature/rust-core from dev
+Parallelism: 1.2+1.3 parallel, 1.4 parallel with 1.3, 1.5 depends on 1.3, 1.7 independent, 1.8 depends on all
