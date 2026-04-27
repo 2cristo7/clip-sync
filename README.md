@@ -95,9 +95,17 @@ clip-sync/
 │       └── com/clipsync/         source code (22 Kotlin files)
 └── docs/
     ├── installation.md           full setup guide ← start here
-    ├── security.md               security model and threat model
-    ├── protocol.md               wire protocol reference
-    └── tailscale-setup.md        Tailscale-specific guide
+    ├── architecture/
+    │   ├── protocol.md           wire protocol reference
+    │   ├── security.md           security model
+    │   ├── threat-model.md       threat model
+    │   └── analisis-tecnico-profundo.pdf  deep analysis (Gemini)
+    ├── guides/
+    │   └── tailscale-setup.md    Tailscale-specific guide
+    ├── development/
+    │   └── TODO.md, plans, HANDOFF
+    └── phases/
+        └── phase-{1-9}-summary.md  development pipeline history
 ```
 
 ---
@@ -111,13 +119,13 @@ ClipSync is designed for use on trusted networks or a private Tailscale tailnet.
 - Timestamps validated within ±60 s to prevent replay attacks
 - Secrets stored in macOS Keychain and Android EncryptedSharedPreferences
 
-See [docs/security.md](docs/security.md) for the full security model.
+See [docs/architecture/security.md](docs/architecture/security.md) for the full security model.
 
 ---
 
 ## Deep technical analysis
 
-[docs/analisis-tecnico-profundo.pdf](docs/analisis-tecnico-profundo.pdf) (also available as [Markdown](docs/analisis-tecnico-profundo.md)) is a detailed technical document covering every layer of ClipSync — discovery, pairing, TLS, HMAC, secret storage, Android clipboard restrictions, full data flows, and the threat model.
+[docs/architecture/analisis-tecnico-profundo.pdf](docs/architecture/analisis-tecnico-profundo.pdf) (also available as [Markdown](docs/architecture/analisis-tecnico-profundo.md)) is a detailed technical document covering every layer of ClipSync — discovery, pairing, TLS, HMAC, secret storage, Android clipboard restrictions, full data flows, and the threat model.
 
 It was produced by feeding the entire v0.1.0 source code to **Gemini Deep Research** with a structured prompt asking it to explain the system top-to-bottom, compare each design decision against the alternatives that were rejected, and evaluate the honest trade-offs of each choice. The document is written in Spanish and is aimed at a reader with a solid technical background who wants to understand not just *what* the code does but *why* each decision was made.
 
@@ -126,7 +134,7 @@ It was produced by feeding the entire v0.1.0 source code to **Gemini Deep Resear
 ## Known limitations
 
 - mDNS auto-discovery does not work over Tailscale (no multicast in WireGuard). Use manual IP entry with the Mac's Tailscale IP (`100.x.x.x`).
-- Clipboard auto-send on Android requires Shizuku or an Accessibility Service (see [docs/installation.md](docs/installation.md)).
+- Clipboard auto-send on Android requires Shizuku or an Accessibility Service (see [installation guide](docs/installation.md#4-shizuku--automatic-clipboard-reading)).
 - Code signing and Gatekeeper notarization are not configured for distribution.
 
 ---

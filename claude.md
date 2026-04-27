@@ -103,7 +103,7 @@ The master agent:
 - `TokenStore.revoke()` exists but is not wired to the menu bar (UI pending).
 - No pairing-secret rotation from the UI.
 - macOS code signing: team ID `8FNGRJHHV4` configured but no certificate/provisioning profile; unsigned builds work (`CODE_SIGN_IDENTITY = "-"`). Android APK signing not configured.
-- mDNS does not work over Tailscale (no multicast); documented in `docs/tailscale-setup.md`.
+- mDNS does not work over Tailscale (no multicast); documented in `docs/guides/tailscale-setup.md`.
 
 ---
 
