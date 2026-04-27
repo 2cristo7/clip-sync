@@ -1,0 +1,7 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/clipsync-core",
+    "crates/clipsync-server",
+    "crates/clipsync-client",
+]
