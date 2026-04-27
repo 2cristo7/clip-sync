@@ -17,9 +17,12 @@ Real-time clipboard synchronisation between macOS and Android over a local netwo
 - **Secure channel** — self-signed TLS with SPKI fingerprint pinning (TOFU)
 - **Authenticated payloads** — Bearer token + HMAC-SHA256 on every request
 - **Persistent connection** — Android foreground service with automatic reconnection
-- **Floating overlay** — persistent FAB on Android to push clipboard from any app without switching to ClipSync
 - **Neumorphic UI** — clean dark/light Android interface
 - **Tailscale support** — works over WireGuard tunnels when away from home
+
+### In the code but not currently surfaced
+
+- **Floating FAB overlay** (`ClipOverlayManager`) — a persistent bubble that floats over any Android app and pushes the clipboard to the Mac on tap. The implementation is complete but disabled in the current UI; it can be re-enabled.
 
 ---
 
