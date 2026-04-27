@@ -25,6 +25,9 @@ chrono = { version = "0.4", features = ["serde"] }
 keyring = "3"
 data-encoding = "2"
 png = "0.18"
+pem = "3"
+dirs = "6"
+time = "0.3"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }
