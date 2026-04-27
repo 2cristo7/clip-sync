@@ -59,8 +59,6 @@ final class PasteboardInjector: @unchecked Sendable {
         case .file:
             break
         case .image:
-            // Always inject as PNG — universally supported by macOS pasteboard.
-            // toPng() handles JPEG, WebP, GIF, TIFF, BMP, and any format NSImage can decode.
             let pngData: Data
             if payload.mime.lowercased() == "image/png" {
                 pngData = data
@@ -73,6 +71,7 @@ final class PasteboardInjector: @unchecked Sendable {
             guard pasteboard.setData(pngData, forType: .png) else {
                 throw PasteboardInjectionError.writeFailed
             }
+            try saveFile(data: pngData, payload: ClipPayload.file(pngData, name: imageFileName(payload), mime: "image/png"))
         }
         logger.debug("Injected payload", metadata: [
             "type": .string(payload.type.rawValue),
@@ -82,15 +81,19 @@ final class PasteboardInjector: @unchecked Sendable {
     }
 
     private func saveFile(data: Data, payload: ClipPayload) throws {
-        let downloadsURL = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask).first!
+        let documentsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let clipSyncDir = documentsURL.appendingPathComponent("ClipSync")
+        if !FileManager.default.fileExists(atPath: clipSyncDir.path) {
+            try FileManager.default.createDirectory(at: clipSyncDir, withIntermediateDirectories: true)
+        }
         let fileName = payload.name ?? "clipsync_\(payload.nonce)"
-        var destURL = downloadsURL.appendingPathComponent(fileName)
+        var destURL = clipSyncDir.appendingPathComponent(fileName)
         var counter = 1
         let baseName = destURL.deletingPathExtension().lastPathComponent
         let ext = destURL.pathExtension
         while FileManager.default.fileExists(atPath: destURL.path) {
             let newName = ext.isEmpty ? "\(baseName) (\(counter))" : "\(baseName) (\(counter)).\(ext)"
-            destURL = downloadsURL.appendingPathComponent(newName)
+            destURL = clipSyncDir.appendingPathComponent(newName)
             counter += 1
         }
         do {
@@ -98,7 +101,7 @@ final class PasteboardInjector: @unchecked Sendable {
         } catch {
             throw PasteboardInjectionError.writeFailed
         }
-        logger.info("File saved to Downloads: \(destURL.lastPathComponent)")
+        logger.info("File saved to Documents/ClipSync: \(destURL.lastPathComponent)")
         showFileSavedNotification(name: destURL.lastPathComponent)
     }
 
@@ -106,11 +109,18 @@ final class PasteboardInjector: @unchecked Sendable {
         DispatchQueue.main.async {
             let alert = NSAlert()
             alert.messageText = "ClipSync"
-            alert.informativeText = "File saved to Downloads: \(name)"
+            alert.informativeText = "File saved to Documents/ClipSync: \(name)"
             alert.alertStyle = .informational
             alert.addButton(withTitle: "OK")
             alert.runModal()
         }
+    }
+
+    private func imageFileName(_ payload: ClipPayload) -> String {
+        if let name = payload.name { return name }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
+        return "ClipSync_\(formatter.string(from: Date())).png"
     }
 
     /// Convert any image data to PNG via NSImage. Handles JPEG, WebP, GIF,
