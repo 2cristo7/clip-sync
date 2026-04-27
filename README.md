@@ -146,6 +146,12 @@ It was produced by feeding the entire v0.1.0 source code to **Gemini Deep Resear
 
 ---
 
+## Contributing
+
+Issues and improvement suggestions are welcome — feel free to [open one](https://github.com/2cristo7/clip-sync/issues).
+
+---
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
