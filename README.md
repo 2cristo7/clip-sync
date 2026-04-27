@@ -2,18 +2,22 @@
 
 Real-time clipboard synchronisation between macOS and Android over a local network or Tailscale.
 
-Copy text or an image on your Mac — it appears on your Android phone in under a second. Tap the floating button on Android to push your clipboard back to the Mac.
+## What it does
+
+- **Text, bidirectional** — copy text on the Mac and it lands in the Android clipboard instantly, and vice versa.
+- **Images from Mac to Android** — copy an image or screenshot on the Mac (⌘+Ctrl+Shift+4) and it appears in the Android clipboard, ready to paste anywhere.
+- **Screenshots, bidirectional** — take a screenshot on Android and it is sent to the Mac clipboard automatically. Take one on the Mac and it goes to Android.
+- **Share to Mac** — a "Mac" button appears in the Android share sheet. Tap it to send any file or photo directly to the Mac; it is saved in `Documents/ClipSync/` and copied to the Mac clipboard.
 
 ---
 
 ## Features
 
-- **Bidirectional sync** — text and images (up to 20 MB) in both directions
 - **Auto-discovery** — mDNS/Bonjour on LAN; manual IP for Tailscale
 - **Secure channel** — self-signed TLS with SPKI fingerprint pinning (TOFU)
 - **Authenticated payloads** — Bearer token + HMAC-SHA256 on every request
 - **Persistent connection** — Android foreground service with automatic reconnection
-- **Floating overlay** — persistent FAB on Android to push clipboard from any app
+- **Floating overlay** — persistent FAB on Android to push clipboard from any app without switching to ClipSync
 - **Neumorphic UI** — clean dark/light Android interface
 - **Tailscale support** — works over WireGuard tunnels when away from home
 
