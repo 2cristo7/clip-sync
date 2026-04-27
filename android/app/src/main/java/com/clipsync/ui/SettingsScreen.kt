@@ -36,6 +36,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.outlined.AdminPanelSettings
+import androidx.compose.material.icons.outlined.ContentPaste
+import androidx.compose.material.icons.outlined.Router
+import androidx.compose.material.icons.outlined.SettingsEthernet
+import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.outlined.VpnKey
+import androidx.compose.material.icons.outlined.Wifi
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.input.KeyboardType
@@ -59,6 +66,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -67,17 +77,25 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.clipsync.discovery.Discovered
 import com.clipsync.storage.Prefs
 import com.clipsync.ui.ShizukuInstallState
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import com.clipsync.ui.theme.NeuButton
 import com.clipsync.ui.theme.NeuCard
 import com.clipsync.ui.theme.NeuColors
+import com.clipsync.ui.theme.NeuManageRow
 import com.clipsync.ui.theme.NeuSectionHeader
 import com.clipsync.ui.theme.NeuSegmentedToggle
 import com.clipsync.ui.theme.NeuStatusBadge
+import com.clipsync.ui.theme.NeuStatusPill
+import com.clipsync.ui.theme.NeuStatusRow
+import com.clipsync.ui.theme.NeuToggleRow
 
 @Composable
 fun SettingsScreen(
     isDark: Boolean = true,
-    onToggleTheme: () -> Unit = {},
+    onToggleTheme: (cx: Float, cy: Float) -> Unit = { _, _ -> },
     vm: SettingsViewModel = viewModel(),
 ) {
     val context = LocalContext.current
@@ -132,7 +150,7 @@ fun SettingsScreen(
                 },
                 confirmButton = {
                     NeuButton(onClick = { vm.openTailscalePlayStore(context) }, isAccent = true) {
-                        Text("Install Tailscale", color = NeuColors.TextOnAccent)
+                        Text("Install Tailscale", color = NeuColors.Accent)
                     }
                 },
                 dismissButton = {
@@ -193,12 +211,12 @@ fun SettingsScreen(
                         NeuButton(onClick = { vm.downloadShizuku(context) }, isAccent = true) {
                             Text(
                                 if (install is ShizukuInstallState.Error) "Retry" else "Download",
-                                color = NeuColors.TextOnAccent,
+                                color = NeuColors.Accent,
                             )
                         }
                     is ShizukuInstallState.ReadyToInstall ->
                         NeuButton(onClick = { vm.installShizuku(context, install.file) }, isAccent = true) {
-                            Text("Install now", color = NeuColors.TextOnAccent)
+                            Text("Install now", color = NeuColors.Accent)
                         }
                     else -> {}  // Fetching / Downloading — no button
                 }
@@ -296,12 +314,22 @@ fun SettingsScreen(
                     style = MaterialTheme.typography.headlineLarge,
                     fontWeight = FontWeight.Bold,
                 )
+                var themeBtnCoords by remember { mutableStateOf<LayoutCoordinates?>(null) }
                 IconButton(
-                    onClick = onToggleTheme,
+                    onClick = {
+                        themeBtnCoords?.let { c ->
+                            val pos = c.positionInWindow()
+                            onToggleTheme(
+                                pos.x + c.size.width / 2f,
+                                pos.y + c.size.height / 2f,
+                            )
+                        } ?: onToggleTheme(0f, 0f)
+                    },
                     modifier = Modifier
                         .size(40.dp)
                         .clip(CircleShape)
                         .background(NeuColors.SurfaceRaised)
+                        .onGloballyPositioned { themeBtnCoords = it }
                 ) {
                     Icon(
                         imageVector = if (isDark) Icons.Filled.LightMode else Icons.Filled.DarkMode,
@@ -312,6 +340,78 @@ fun SettingsScreen(
                 }
             }
             Spacer(Modifier.height(8.dp))
+
+            // Connection mode — only show toggle when both options available
+            val canAuto = state.isOnWifi
+            val canManual = state.isTailscaleVpnActive
+            val effectiveMode = when {
+                canAuto && canManual -> state.mode
+                canAuto -> Prefs.MODE_AUTO
+                canManual -> Prefs.MODE_MANUAL
+                else -> ""
+            }
+
+            NeuSectionHeader("Connection Mode", modifier = Modifier.fillMaxWidth(), textAlign = androidx.compose.ui.text.style.TextAlign.Center, icon = Icons.Outlined.Wifi)
+            if (!canAuto && !canManual) {
+                NeuCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            "No connection available",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = NeuColors.Error,
+                        )
+                        Text(
+                            "Connect to the same WiFi as your Mac, or activate Tailscale VPN to sync remotely.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                        if (state.tailscaleState is TailscaleState.Installed) {
+                            NeuButton(
+                                onClick = {
+                                    val intent = context.packageManager
+                                        .getLaunchIntentForPackage("com.tailscale.ipn")
+                                    if (intent != null) context.startActivity(intent)
+                                },
+                                isAccent = true,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text("Open Tailscale", color = NeuColors.Accent)
+                            }
+                        } else if (state.tailscaleState is TailscaleState.NotInstalled) {
+                            NeuButton(
+                                onClick = { vm.openTailscalePlayStore(context) },
+                                isAccent = true,
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text("Install Tailscale", color = NeuColors.Accent)
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (canAuto && canManual) {
+                NeuSegmentedToggle(
+                    options = listOf("Auto (mDNS)", "Manual IP"),
+                    selectedIndex = if (state.mode == Prefs.MODE_AUTO) 0 else 1,
+                    onSelected = { idx ->
+                        vm.setMode(context, if (idx == 0) Prefs.MODE_AUTO else Prefs.MODE_MANUAL)
+                    }
+                )
+            } else if (canAuto) {
+                Text(
+                    "WiFi — auto discovery",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
+            } else if (canManual) {
+                Text(
+                    "Tailscale VPN — manual IP",
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.fillMaxWidth(),
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
+            }
 
             // Status card
             NeuCard {
@@ -361,13 +461,13 @@ fun SettingsScreen(
                                 enabled = !connectBlocked,
                                 isAccent = true
                             ) {
-                                Text("Connect", color = NeuColors.TextOnAccent)
+                                Text("Connect", color = NeuColors.Accent)
                             }
                         } else {
                             NeuButton(
                                 onClick = { vm.stopSync(context) },
                                 modifier = Modifier.fillMaxWidth(),
-                                isAccent = false
+                                isDestructive = true
                             ) {
                                 Text("Stop Sync", color = NeuColors.Error)
                             }
@@ -376,85 +476,13 @@ fun SettingsScreen(
                 }
             }
 
-            // Connection mode — only show toggle when both options available
-            val canAuto = state.isOnWifi
-            val canManual = state.isTailscaleVpnActive
-            val effectiveMode = when {
-                canAuto && canManual -> state.mode
-                canAuto -> Prefs.MODE_AUTO
-                canManual -> Prefs.MODE_MANUAL
-                else -> ""
-            }
-
-            NeuSectionHeader("Connection Mode", modifier = Modifier.fillMaxWidth(), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-            if (!canAuto && !canManual) {
-                NeuCard {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(
-                            "No connection available",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = NeuColors.Error,
-                        )
-                        Text(
-                            "Connect to the same WiFi as your Mac, or activate Tailscale VPN to sync remotely.",
-                            style = MaterialTheme.typography.bodySmall,
-                        )
-                        if (state.tailscaleState is TailscaleState.Installed) {
-                            NeuButton(
-                                onClick = {
-                                    val intent = context.packageManager
-                                        .getLaunchIntentForPackage("com.tailscale.ipn")
-                                    if (intent != null) context.startActivity(intent)
-                                },
-                                isAccent = true,
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text("Open Tailscale", color = NeuColors.TextOnAccent)
-                            }
-                        } else if (state.tailscaleState is TailscaleState.NotInstalled) {
-                            NeuButton(
-                                onClick = { vm.openTailscalePlayStore(context) },
-                                isAccent = true,
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text("Install Tailscale", color = NeuColors.TextOnAccent)
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (canAuto && canManual) {
-                NeuSegmentedToggle(
-                    options = listOf("Auto (mDNS)", "Manual IP"),
-                    selectedIndex = if (state.mode == Prefs.MODE_AUTO) 0 else 1,
-                    onSelected = { idx ->
-                        vm.setMode(context, if (idx == 0) Prefs.MODE_AUTO else Prefs.MODE_MANUAL)
-                    }
-                )
-            } else if (canAuto) {
-                Text(
-                    "WiFi — auto discovery",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                )
-            } else if (canManual) {
-                Text(
-                    "Tailscale VPN — manual IP",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                )
-            }
-
             // Discovery / Manual section
             Column(
                 modifier = Modifier.animateContentSize(),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 if (effectiveMode == Prefs.MODE_AUTO) {
-                    NeuSectionHeader("Discovered Servers")
+                    NeuSectionHeader("Discovered Servers", icon = Icons.Outlined.Router)
                     if (state.discovered.isEmpty()) {
                         NeuCard {
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -481,32 +509,45 @@ fun SettingsScreen(
                         }
                     }
                 } else if (effectiveMode == Prefs.MODE_MANUAL) {
-                    NeuSectionHeader("Manual Connection")
+                    NeuSectionHeader("Manual Connection", icon = Icons.Outlined.SettingsEthernet)
                     if (state.hasPairing && state.mode == Prefs.MODE_MANUAL) {
                         val isActive = state.status is ConnectionStatus.Connected ||
                             state.status is ConnectionStatus.Connecting
-                        NeuCard {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column(Modifier.weight(1f)) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 4.dp, vertical = 14.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(Modifier.weight(1f).padding(end = 12.dp)) {
+                                Text(
+                                    state.pairedHost ?: "Manual",
+                                    style = MaterialTheme.typography.titleMedium,
+                                )
+                                Text(
+                                    "${state.pairedHost}:${state.pairedPort}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = NeuColors.TextSecondary,
+                                )
+                            }
+                            if (isActive) {
+                                NeuStatusPill(label = "Connected", active = true)
+                            } else {
+                                val pillShape = RoundedCornerShape(50)
+                                Box(
+                                    contentAlignment = Alignment.Center,
+                                    modifier = Modifier
+                                        .clip(pillShape)
+                                        .border(BorderStroke(1.dp, NeuColors.Error.copy(alpha = 0.5f)), pillShape)
+                                        .clickable { vm.unpair(context) }
+                                        .padding(horizontal = 14.dp, vertical = 7.dp)
+                                ) {
                                     Text(
-                                        state.pairedHost ?: "Manual",
-                                        style = MaterialTheme.typography.titleMedium,
+                                        "Unpair",
+                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
+                                        color = NeuColors.Error,
                                     )
-                                    Text(
-                                        "${state.pairedHost}:${state.pairedPort}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                    )
-                                }
-                                if (isActive) {
-                                    NeuStatusBadge(label = "Connected", color = NeuColors.Connected)
-                                } else {
-                                    NeuButton(onClick = { vm.unpair(context) }, isAccent = false) {
-                                        Text("Unpair", color = NeuColors.Error)
-                                    }
                                 }
                             }
                         }
@@ -583,7 +624,7 @@ fun SettingsScreen(
                                     enabled = hostValid && portValid && !vpnBlocked,
                                     isAccent = true,
                                 ) {
-                                    Text("Pair", color = NeuColors.TextOnAccent)
+                                    Text("Pair", color = NeuColors.Accent)
                                 }
                             }
                         }
@@ -593,23 +634,18 @@ fun SettingsScreen(
 
             // Tailscale status
             if (state.tailscaleState is TailscaleState.Installed) {
-                NeuSectionHeader("Tailscale")
-                NeuCard {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        NeuStatusBadge(label = "Installed", color = NeuColors.Connected)
-                        if (state.isTailscaleVpnActive) {
-                            NeuStatusBadge(label = "VPN active", color = NeuColors.Accent)
-                        } else {
-                            NeuStatusBadge(label = "VPN off", color = NeuColors.Error)
-                        }
-                    }
-                }
+                NeuSectionHeader("Tailscale", icon = Icons.Outlined.VpnKey)
+                NeuStatusRow(
+                    title = "Tailscale",
+                    subtitle = if (state.isTailscaleVpnActive) "VPN active" else "VPN off",
+                    active = state.isTailscaleVpnActive,
+                    activeLabel = "VPN active",
+                    inactiveLabel = "VPN off",
+                    inactiveIsError = true,
+                    divider = false,
+                )
             } else if (state.tailscaleState is TailscaleState.NotInstalled && state.isOnMobileData) {
-                NeuSectionHeader("Tailscale")
+                NeuSectionHeader("Tailscale", icon = Icons.Outlined.VpnKey)
                 NeuCard {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         NeuStatusBadge(label = "Not installed", color = NeuColors.TextSecondary)
@@ -622,69 +658,59 @@ fun SettingsScreen(
                             isAccent = true,
                             modifier = Modifier.fillMaxWidth(),
                         ) {
-                            Text("Install Tailscale", color = NeuColors.TextOnAccent)
+                            Text("Install Tailscale", color = NeuColors.Accent)
                         }
                     }
                 }
             }
 
             // Clipboard access (Shizuku)
-            NeuSectionHeader("Clipboard Access")
-            NeuCard {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    NeuStatusBadge(
-                        label = if (shizukuReady) "Shizuku active" else "Shizuku inactive",
-                        color = if (shizukuReady) NeuColors.Connected else NeuColors.TextSecondary,
-                    )
-                    Text(
-                        if (shizukuReady)
-                            "Direct clipboard access is active. Starts and stops with the Mac connection."
-                        else
-                            "Shizuku is not active. Go to Permissions to set it up.",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-            }
+            NeuSectionHeader("Clipboard Access", icon = Icons.Outlined.ContentPaste)
+            NeuStatusRow(
+                title = "Shizuku",
+                subtitle = if (shizukuReady)
+                    "Direct clipboard access is active. Starts and stops with the Mac connection."
+                else
+                    "Not active. Go to Permissions to set it up.",
+                active = shizukuReady,
+                activeLabel = "Active",
+                inactiveLabel = "Inactive",
+                divider = false,
+            )
 
             // Toggles
-            NeuSectionHeader("Features")
-            NeuCard {
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    ToggleRow(
-                        title = "Auto send on copy",
-                        subtitle = "Sends clipboard to Mac as soon as you copy",
-                        checked = state.autoSendEnabled,
-                        onCheckedChange = { vm.setAutoSendEnabled(context, it) },
-                    )
-                }
-            }
+            NeuSectionHeader("Features", icon = Icons.Outlined.Tune)
+            NeuToggleRow(
+                title = "Auto send on copy",
+                subtitle = "Sends clipboard to Mac as soon as you copy",
+                checked = state.autoSendEnabled,
+                onCheckedChange = { vm.setAutoSendEnabled(context, it) },
+                divider = false,
+            )
 
             // Permissions info
-            NeuSectionHeader("Permissions")
-            NeuCard {
-                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    PermissionInfoRow(
-                        label = "Notifications",
-                        description = "Required for the sync service to run in the background",
-                        granted = state.notificationPermissionGranted,
-                        onManage = {
-                            context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
-                                putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
-                            })
-                        }
-                    )
-                    PermissionInfoRow(
-                        label = "Media access",
-                        description = "Required for sending screenshots to Mac",
-                        granted = state.mediaPermissionGranted,
-                        onManage = {
-                            context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                data = Uri.parse("package:${context.packageName}")
-                            })
-                        }
-                    )
+            NeuSectionHeader("Permissions", icon = Icons.Outlined.AdminPanelSettings)
+            NeuManageRow(
+                label = "Notifications",
+                description = "Required for the sync service to run in the background",
+                granted = state.notificationPermissionGranted,
+                onManage = {
+                    context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).apply {
+                        putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                    })
                 }
-            }
+            )
+            NeuManageRow(
+                label = "Media access",
+                description = "Required for sending screenshots to Mac",
+                granted = state.mediaPermissionGranted,
+                onManage = {
+                    context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                        data = Uri.parse("package:${context.packageName}")
+                    })
+                },
+                divider = false,
+            )
 
             // Error message
             state.error?.let { error ->
@@ -744,74 +770,9 @@ private fun PermissionRow(
             }
         } else {
             NeuButton(onClick = onGrant, isAccent = true) {
-                Text(grantLabel, color = NeuColors.TextOnAccent)
+                Text(grantLabel, color = NeuColors.Accent)
             }
         }
-    }
-}
-
-@Composable
-private fun PermissionInfoRow(
-    label: String,
-    description: String,
-    granted: Boolean,
-    onManage: () -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(if (granted) NeuColors.Connected else NeuColors.Error)
-                )
-                Text(label, style = MaterialTheme.typography.titleMedium)
-            }
-            Text(
-                description,
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(start = 16.dp),
-            )
-        }
-        NeuButton(onClick = onManage) {
-            Text("Manage", color = NeuColors.TextPrimary)
-        }
-    }
-}
-
-@Composable
-private fun ToggleRow(
-    title: String,
-    subtitle: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.titleMedium)
-            Text(subtitle, style = MaterialTheme.typography.bodySmall)
-        }
-        Switch(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            colors = SwitchDefaults.colors(
-                checkedThumbColor = NeuColors.Accent,
-                checkedTrackColor = NeuColors.Accent.copy(alpha = 0.3f),
-                uncheckedThumbColor = NeuColors.TextSecondary,
-                uncheckedTrackColor = NeuColors.DarkShadow.copy(alpha = 0.3f),
-            )
-        )
     }
 }
 
@@ -880,7 +841,7 @@ private fun DiscoveredServerCard(
                 }
                 else -> {
                     NeuButton(onClick = onPair, isAccent = true) {
-                        Text("Pair", color = NeuColors.TextOnAccent)
+                        Text("Pair", color = NeuColors.Accent)
                     }
                 }
             }
