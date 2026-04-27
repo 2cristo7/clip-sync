@@ -39,22 +39,22 @@ data class NeuPalette(
 )
 
 val DarkPalette = NeuPalette(
-    background     = Color(0xFF1A1A1A),
-    surface        = Color(0xFF222222),
-    surfaceRaised  = Color(0xFF2A2A2A),
-    surfaceInset   = Color(0xFF141414),
-    border         = Color(0xFF333333),
+    background     = Color(0xFF121418),
+    surface        = Color(0xFF191D24),
+    surfaceRaised  = Color(0xFF1E2330),
+    surfaceInset   = Color(0xFF0D0F14),
+    border         = Color(0xFF252C3A),
     accent         = Color(0xFF5AEAAA),
     accentLight    = Color(0xFF7DF2C0),
     accentDark     = Color(0xFF38D690),
     accentGlow     = Color(0x305AEAAA),
-    accentSubtle   = Color(0x185AEAAA),
+    accentSubtle   = Color(0x265AEAAA),
     connected      = Color(0xFF5AEAAA),
-    disconnected   = Color(0xFF505050),
+    disconnected   = Color(0xFF404858),
     error          = Color(0xFFFF6B7A),
     warning        = Color(0xFFFFBB5C),
-    textPrimary    = Color(0xFFE8E8E8),
-    textSecondary  = Color(0xFF888888),
+    textPrimary    = Color(0xFFECEFF4),
+    textSecondary  = Color(0xFF7A8499),
     textOnAccent   = Color(0xFF0A1A12),
     isDark         = true,
 )
@@ -76,7 +76,7 @@ val LightPalette = NeuPalette(
     warning        = Color(0xFFE89B2D),
     textPrimary    = Color(0xFF1A2030),
     textSecondary  = Color(0xFF6B7588),
-    textOnAccent   = Color.White,
+    textOnAccent   = Color(0xFF0D3A1F),
     isDark         = false,
 )
 
