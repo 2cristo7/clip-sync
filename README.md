@@ -1,140 +1,136 @@
-# ClipSync -- Shared Clipboard (Mac <-> Android)
+# ClipSync
 
-Real-time clipboard synchronization between macOS and Android over your local
-network or Tailscale. No cloud services, no accounts, fully open-source.
+Real-time clipboard synchronisation between macOS and Android over a local network or Tailscale.
 
-The Mac runs a lightweight menu-bar server (Swift / Hummingbird 2.x) that
-exposes HTTPS + WebSocket on port 7010. The Android client (Kotlin / Jetpack
-Compose) connects, receives clipboard changes as push notifications, and sends
-content to the Mac via Android's native Share sheet.
+Copy text or an image on your Mac — it appears on your Android phone in under a second. Tap the floating button on Android to push your clipboard back to the Mac.
+
+---
 
 ## Features
 
-- Real-time clipboard sync (text and images) over WebSocket.
-- Clipboard overlay FAB -- copy anything on Android and tap the floating
-  button to send it to your Mac instantly.
-- Rich notifications on Android with one-tap copy to clipboard.
-- TOFU pairing with a one-time six-digit code; all subsequent requests are
-  authenticated with Bearer tokens.
-- HMAC-SHA256 integrity on every payload.
-- Self-signed TLS with SPKI fingerprint pinning (published via mDNS TXT
-  record).
-- Automatic discovery on LAN via mDNS/Bonjour (`_clipsync._tcp`).
-- Tailscale support for syncing outside the local network.
-- Foreground service on Android keeps the connection alive.
+- **Bidirectional sync** — text and images (up to 20 MB) in both directions
+- **Auto-discovery** — mDNS/Bonjour on LAN; manual IP for Tailscale
+- **Secure channel** — self-signed TLS with SPKI fingerprint pinning (TOFU)
+- **Authenticated payloads** — Bearer token + HMAC-SHA256 on every request
+- **Persistent connection** — Android foreground service with automatic reconnection
+- **Floating overlay** — persistent FAB on Android to push clipboard from any app
+- **Neumorphic UI** — clean dark/light Android interface
+- **Tailscale support** — works over WireGuard tunnels when away from home
+
+---
+
+## How it works
+
+```
+┌─────────────────────────────────────┐     WebSocket / HTTPS (port 7010)
+│         macOS menu bar app          │◄────────────────────────────────────►│  Android app  │
+│                                     │                                       │               │
+│  PasteboardWatcher → ClipServer     │  ── clipboard changed ──►            │ ClipClient    │
+│  PasteboardInjector ← WebSocketHub  │  ◄── POST /inject ────────           │ ClipSender    │
+└─────────────────────────────────────┘                                       └───────────────┘
+
+  TLS (SPKI pinned)  +  Bearer token  +  HMAC-SHA256 per payload
+  mDNS (_clipsync._tcp) for auto-discovery on LAN
+```
+
+**Pairing** uses a TOFU (trust on first use) model: the Mac displays a 6-digit code; the Android app calls `GET /pair?code=XXXX` and receives a bearer token + HMAC secret, both stored in encrypted storage.
+
+---
 
 ## Requirements
 
-| Component | Minimum version               |
-|-----------|-------------------------------|
-| macOS     | 14.0 (Sonoma) or later        |
-| Xcode     | 15.0 or later                 |
-| Android   | 13 (API 33) or later          |
-| JDK       | 17                            |
+| Platform | Minimum    | Tested with         |
+|----------|-----------|---------------------|
+| macOS    | 14.0      | Xcode 26, Swift 5.9 |
+| Android  | 13 (API 33)| AGP 8.x, Kotlin 1.9 |
 
-## Installation
+---
 
-### Mac (build from source)
+## Quick start
+
+See **[docs/installation.md](docs/installation.md)** for the full guide, including code-signing setup, Shizuku (for auto clipboard read), and Tailscale.
+
+**macOS — build & run**
 
 ```bash
-# Clone the repository
-git clone https://github.com/2cristo7/shared-clipboard.git
-cd shared-clipboard
+# 1. Set up code signing (one-time)
+bash mac/scripts/setup-signing.sh
 
-# Build a release archive (output: mac/build/Release/ClipSync.app)
-bash mac/scripts/build-release.sh
+# 2. Build
+xcodebuild \
+  -project mac/ClipSync.xcodeproj \
+  -scheme ClipSync \
+  -configuration Debug \
+  -derivedDataPath mac/build \
+  build
 
-# Or open in Xcode and build manually
-open mac/ClipSync.xcodeproj
+# 3. Launch
+open mac/build/Build/Products/Debug/ClipSync.app
 ```
 
-### Android (build with Gradle)
+**Android — build APK**
 
 ```bash
 cd android
-
-# Debug APK
-./gradlew :app:assembleDebug
-# Output: app/build/outputs/apk/debug/app-debug.apk
-
-# Release APK (requires signing config)
-./gradlew :app:assembleRelease
+./gradlew assembleDebug
+# APK: android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Install the APK on your device via `adb install` or transfer it directly.
+Sideload the APK via `adb install` or transfer to the device.
 
-## Setup
-
-### 1. Start the Mac server
-
-Launch **ClipSync** from Applications or build output. A menu-bar icon appears.
-
-### 2. Pair the Android client
-
-1. Open ClipSync on Android.
-2. Ensure both devices are on the same Wi-Fi network (or connected via
-   Tailscale).
-3. The Mac will appear automatically via mDNS, or enter the Mac's IP address
-   manually.
-4. Tap **Pair**. A six-digit code is displayed on the Mac -- enter it on
-   Android.
-5. Once paired, clipboard sync starts automatically.
-
-### 3. Tailscale (optional)
-
-For syncing outside your local network, install Tailscale on both devices and
-use the Mac's Tailscale IP (`100.x.x.x`) in the Android client. See
-[docs/tailscale-setup.md](docs/tailscale-setup.md) for detailed instructions.
-
-## Architecture
-
-```
-Mac (Server)                          Android (Client)
-+---------------------------+         +---------------------------+
-| NSPasteboard monitor      |         | ClipboardManager listener |
-| Hummingbird HTTPS :7010   | <-WS-> | OkHttp WebSocket client   |
-| WebSocket push            |         | Foreground Service        |
-| mDNS _clipsync._tcp       |         | NsdManager discovery      |
-| Keychain (pairing secret) |         | EncryptedSharedPrefs      |
-+---------------------------+         +---------------------------+
-```
-
-**Endpoints:**
-
-| Method | Path      | Description                        |
-|--------|-----------|------------------------------------|
-| GET    | `/health` | Server health check                |
-| POST   | `/inject` | Push content to Mac clipboard      |
-| GET    | `/pair`   | Exchange pairing code for token    |
-| WS     | `/ws`     | Real-time clipboard change stream  |
-
-All requests require a valid Bearer token (obtained during pairing) and an
-HMAC-SHA256 signature. The connection uses TLS with SPKI fingerprint pinning.
-
-See [docs/protocol.md](docs/protocol.md) and
-[docs/security.md](docs/security.md) for protocol and security details.
+---
 
 ## Repository structure
 
 ```
-mac/        macOS app (Swift, Hummingbird 2.x, SwiftNIO)
-android/    Android client (Kotlin, Jetpack Compose, OkHttp)
-docs/       Protocol spec, security model, Tailscale guide
+clip-sync/
+├── mac/                          macOS Swift app (Xcode project)
+│   ├── ClipSync/                 source code (17 Swift files)
+│   ├── ClipSyncTests/            unit tests (35 tests)
+│   └── scripts/
+│       ├── setup-signing.sh      code-signing helper
+│       └── build-release.sh      release build
+├── android/                      Android Kotlin app
+│   └── app/src/main/java/
+│       └── com/clipsync/         source code (22 Kotlin files)
+└── docs/
+    ├── installation.md           full setup guide ← start here
+    ├── security.md               security model and threat model
+    ├── protocol.md               wire protocol reference
+    └── tailscale-setup.md        Tailscale-specific guide
 ```
 
-## Limitations
+---
 
-- Image clipboard sync requires Android 13+ (API 33) due to
-  `ClipDescription.getMimeType` restrictions.
-- mDNS discovery does not work across separate Tailscale networks (tailnets).
-  Use manual IP entry instead.
-- The Mac server binds to `0.0.0.0:7010`; only one instance can run at a time.
-- No multi-device support yet -- one Android client pairs with one Mac at a
-  time.
-- Self-signed TLS means browsers will show certificate warnings if you visit
-  the server URL directly.
+## Security
+
+ClipSync is designed for use on trusted networks or a private Tailscale tailnet. It is **not** intended for public internet exposure.
+
+- TLS with self-signed certificate; SPKI fingerprint pinned on first connect (TOFU)
+- Every request carries a Bearer token and an HMAC-SHA256 of the payload body
+- Timestamps validated within ±60 s to prevent replay attacks
+- Secrets stored in macOS Keychain and Android EncryptedSharedPreferences
+
+See [docs/security.md](docs/security.md) for the full security model.
+
+---
+
+## Deep technical analysis
+
+[docs/analisis-tecnico-profundo.pdf](docs/analisis-tecnico-profundo.pdf) (also available as [Markdown](docs/analisis-tecnico-profundo.md)) is a detailed technical document covering every layer of ClipSync — discovery, pairing, TLS, HMAC, secret storage, Android clipboard restrictions, full data flows, and the threat model.
+
+It was produced by feeding the entire v0.1.0 source code to **Gemini Deep Research** with a structured prompt asking it to explain the system top-to-bottom, compare each design decision against the alternatives that were rejected, and evaluate the honest trade-offs of each choice. The document is written in Spanish and is aimed at a reader with a solid technical background who wants to understand not just *what* the code does but *why* each decision was made.
+
+---
+
+## Known limitations
+
+- mDNS auto-discovery does not work over Tailscale (no multicast in WireGuard). Use manual IP entry with the Mac's Tailscale IP (`100.x.x.x`).
+- Clipboard auto-send on Android requires Shizuku or an Accessibility Service (see [docs/installation.md](docs/installation.md)).
+- Code signing and Gatekeeper notarization are not configured for distribution.
+
+---
 
 ## License
 
-This project is licensed under the MIT License. See [LICENSE](LICENSE) for
-details.
+MIT — see [LICENSE](LICENSE).

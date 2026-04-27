@@ -1,14 +1,47 @@
-# Wire Protocol — Shared Clipboard
+# Wire Protocol
 
-Referencia canónica del protocolo de sincronización entre el servidor macOS y los clientes Android.
+Canonical reference for the sync protocol between the macOS server and Android clients.
 
-## Wire Protocol (shared reference)
+## Transport
 
-- **Transporte**: HTTPS + WebSocket sobre el mismo puerto (por defecto `7010`).
-- **Endpoints HTTP**:
-  - `GET /health` → `{"ok":true,"version":"x.y.z"}`
-  - `POST /inject` (Pixel → Mac) → body: `{"type":"text|image","mime":"...","data":"<base64>","ts":..., "nonce":"...", "hmac":"..."}`
-  - `GET /pair?code=XXXX` → devuelve token si el código está activo.
-- **WebSocket** en `/ws` (Mac → Pixel): frames JSON con el mismo esquema que `/inject`.
-- **Auth**: header `Authorization: Bearer <token>` + HMAC-SHA256 del body con el `pairing-secret`.
-- **Tamaño máximo de imagen**: 20 MB (configurable).
+HTTPS + WebSocket on the same port (default `7010`).
+
+## HTTP endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/health` | Returns `{"ok":true,"version":"x.y.z"}` |
+| `GET` | `/pair?code=XXXX` | Returns bearer token if the code is active |
+| `POST` | `/inject` | Android → Mac: push clipboard content |
+| `GET` | `/ws` | Upgrade to WebSocket (Mac → Android: push) |
+
+## Payload schema
+
+All payloads (both `/inject` and WebSocket frames) use the same JSON schema:
+
+```json
+{
+  "type":  "text | image | file",
+  "mime":  "text/plain | image/png | …",
+  "data":  "<base64-encoded content>",
+  "ts":    1714000000,
+  "nonce": "<random string>",
+  "hmac":  "<HMAC-SHA256 hex of the body>"
+}
+```
+
+## Authentication
+
+Every request must include:
+
+```
+Authorization: Bearer <token>
+```
+
+The `hmac` field is HMAC-SHA256 of the raw request body, keyed with the `pairing-secret` exchanged during pairing.
+
+Timestamps are validated within **±60 seconds** to prevent replay attacks.
+
+## Limits
+
+- Maximum payload size: **20 MB** (configurable in `ServerConfig.swift`)
