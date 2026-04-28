@@ -22,18 +22,23 @@ struct TailscaleHelper {
         guard isInstalled else { return .notInstalled }
 
         let (ipOut, ipErr, ipCode) = runCLIFull(["ip", "-4"])
-        let trimmedIP = ipOut?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
-        if isValidIPv4(trimmedIP) {
-            return .connected(ip: trimmedIP)
+        // App Store CLI prints error to stdout before the IP — scan all lines
+        if let ip = extractIPv4(from: ipOut ?? "") {
+            return .connected(ip: ip)
         }
 
-        // Non-empty but non-IP stdout → CLI printed an error (exit 0 or not)
-        if !trimmedIP.isEmpty || isDaemonError(stderr: ipErr, exitCode: ipCode) {
+        if isDaemonError(stderr: ipErr, exitCode: ipCode) {
             return .daemonDown
         }
 
-        // Empty stdout — daemon may be up but VPN off; check BackendState
+        // Empty or error-only stdout with non-zero exit → daemon down
+        let trimmed = ipOut?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !trimmed.isEmpty && ipCode != 0 {
+            return .daemonDown
+        }
+
+        // stdout empty → daemon up but VPN off; check BackendState
         let (statusOut, statusErr, statusCode) = runCLIFull(["status", "--json"])
         if isDaemonError(stderr: statusErr, exitCode: statusCode) {
             return .daemonDown
@@ -68,21 +73,15 @@ struct TailscaleHelper {
 
     // MARK: - Private
 
-    private static func isValidIPv4(_ s: String) -> Bool {
-        let parts = s.split(separator: ".")
-        guard parts.count == 4 else { return false }
-        return parts.allSatisfy { part in
-            guard let n = Int(part) else { return false }
-            return n >= 0 && n <= 255
+    private static func extractIPv4(from output: String) -> String? {
+        for line in output.components(separatedBy: .newlines) {
+            let s = line.trimmingCharacters(in: .whitespaces)
+            let parts = s.split(separator: ".")
+            guard parts.count == 4 else { continue }
+            let valid = parts.allSatisfy { p in (Int(p).map { $0 >= 0 && $0 <= 255 }) ?? false }
+            if valid { return s }
         }
-    }
-
-    private static func isDaemonErrorText(_ s: String) -> Bool {
-        let lower = s.lowercased()
-        return lower.contains("tailscale gui failed") ||
-               lower.contains("clierror") ||
-               lower.contains("failed to start") ||
-               lower.contains("operation couldn't be completed")
+        return nil
     }
 
     private static func isDaemonError(stderr: String?, exitCode: Int32) -> Bool {
