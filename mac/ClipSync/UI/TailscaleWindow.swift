@@ -4,28 +4,37 @@ import SwiftUI
 struct TailscaleSetupView: View {
     let onStartPairing: () -> Void
 
-    @State private var tailscaleIP: String?
-    @State private var isInstalled = false
+    @State private var state: TailscaleState = .notInstalled
+    @State private var isRefreshing = false
 
     var body: some View {
         VStack(spacing: 20) {
             Text("Tailscale Setup")
                 .font(.title2.weight(.semibold))
-
-            if isInstalled, let ip = tailscaleIP {
-                installedView(ip: ip)
-            } else if isInstalled {
-                runningButNoIPView
-            } else {
-                notInstalledView
-            }
+            stateView
         }
         .padding(28)
         .frame(width: 380, height: 380)
         .onAppear { refresh() }
     }
 
-    private func installedView(ip: String) -> some View {
+    @ViewBuilder
+    private var stateView: some View {
+        switch state {
+        case .notInstalled:
+            notInstalledView
+        case .daemonDown:
+            daemonDownView
+        case .notLoggedIn:
+            notLoggedInView
+        case .disconnected:
+            disconnectedView
+        case .connected(let ip):
+            connectedView(ip: ip)
+        }
+    }
+
+    private func connectedView(ip: String) -> some View {
         VStack(spacing: 16) {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 48))
@@ -50,44 +59,88 @@ struct TailscaleSetupView: View {
                 .fixedSize(horizontal: false, vertical: true)
             Divider()
             HStack(spacing: 12) {
-                Button("On same WiFi? Pair locally") {
-                    onStartPairing()
-                }
-                .buttonStyle(.bordered)
-                Button("Pair via Tailscale") {
-                    onStartPairing()
-                }
-                .buttonStyle(.borderedProminent)
+                Button("Pair locally (WiFi)") { onStartPairing() }
+                    .buttonStyle(.bordered)
+                Button("Pair via Tailscale") { onStartPairing() }
+                    .buttonStyle(.borderedProminent)
             }
         }
     }
 
-    private var runningButNoIPView: some View {
+    private var disconnectedView: some View {
         VStack(spacing: 16) {
             Image(systemName: "wifi.exclamationmark")
                 .font(.system(size: 48))
                 .foregroundStyle(.orange)
             Text("Tailscale VPN not connected")
                 .font(.headline)
-            Text("Tailscale is installed but the VPN is not active.\nConnect to the VPN to get your Tailscale IP.")
+            Text("Tailscale is installed but the VPN is off.\nOpen Tailscale and connect to continue.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 12) {
-                Button("Open Tailscale") {
-                    NSWorkspace.shared.open(URL(fileURLWithPath: "/Applications/Tailscale.app"))
-                }
-                .buttonStyle(.borderedProminent)
+                Button("Open Tailscale") { TailscaleHelper.openApp() }
+                    .buttonStyle(.borderedProminent)
                 Button("Refresh") { refresh() }
                     .buttonStyle(.bordered)
+                    .disabled(isRefreshing)
             }
-            Text("The view will refresh automatically once connected.")
+            Text("Refreshes automatically every 3 s.")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
         }
         .onReceive(Timer.publish(every: 3, on: .main, in: .common).autoconnect()) { _ in
             refresh()
+        }
+    }
+
+    private var daemonDownView: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 48))
+                .foregroundStyle(.yellow)
+            Text("Tailscale daemon not running")
+                .font(.headline)
+            Text("The Tailscale network extension is not active.\nOpen Tailscale to start it — or enable it in\nSystem Settings → Privacy & Security → Network Extensions.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 12) {
+                Button("Open Tailscale") { TailscaleHelper.openApp() }
+                    .buttonStyle(.borderedProminent)
+                Button("System Settings") { TailscaleHelper.openNetworkExtensionSettings() }
+                    .buttonStyle(.bordered)
+            }
+            Button("Refresh") { refresh() }
+                .buttonStyle(.bordered)
+                .disabled(isRefreshing)
+        }
+        .onReceive(Timer.publish(every: 3, on: .main, in: .common).autoconnect()) { _ in
+            refresh()
+        }
+    }
+
+    private var notLoggedInView: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "person.crop.circle.badge.exclamationmark")
+                .font(.system(size: 48))
+                .foregroundStyle(.orange)
+            Text("Not logged in to Tailscale")
+                .font(.headline)
+            Text("Open Tailscale and log in to your account to connect your devices.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 12) {
+                Button("Open Tailscale") { TailscaleHelper.openApp() }
+                    .buttonStyle(.borderedProminent)
+                Button("Refresh") { refresh() }
+                    .buttonStyle(.bordered)
+                    .disabled(isRefreshing)
+            }
         }
     }
 
@@ -102,22 +155,23 @@ struct TailscaleSetupView: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-            Button("Install from App Store") {
-                TailscaleHelper.openDownloadPage()
-            }
-            .buttonStyle(.borderedProminent)
+            Button("Install from App Store") { TailscaleHelper.openDownloadPage() }
+                .buttonStyle(.borderedProminent)
             Button("Refresh") { refresh() }
                 .buttonStyle(.bordered)
+                .disabled(isRefreshing)
         }
     }
 
     private func refresh() {
-        isInstalled = TailscaleHelper.isInstalled
-        guard isInstalled else { return }
-        // ipv4() spawns a subprocess — never block the main thread with waitUntilExit().
+        guard !isRefreshing else { return }
+        isRefreshing = true
         Task.detached(priority: .utility) {
-            let ip = TailscaleHelper.ipv4()
-            await MainActor.run { tailscaleIP = ip }
+            let detected = TailscaleHelper.detect()
+            await MainActor.run {
+                state = detected
+                isRefreshing = false
+            }
         }
     }
 }
@@ -125,7 +179,6 @@ struct TailscaleSetupView: View {
 @MainActor
 final class TailscaleWindowController {
     private var window: NSWindow?
-
     private static let windowSize = NSSize(width: 380, height: 380)
 
     func show(onStartPairing: @escaping () -> Void) {
