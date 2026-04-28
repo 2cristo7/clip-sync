@@ -22,11 +22,13 @@ struct TailscaleHelper {
         guard isInstalled else { return .notInstalled }
 
         let (ipOut, ipErr, ipCode) = runCLIFull(["ip", "-4"])
-        if ipCode == 0, let ip = ipOut?.trimmingCharacters(in: .whitespacesAndNewlines), !ip.isEmpty {
-            return .connected(ip: ip)
+        let trimmedIP = ipOut?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if ipCode == 0, isValidIPv4(trimmedIP) {
+            return .connected(ip: trimmedIP)
         }
 
-        if isDaemonError(stderr: ipErr, exitCode: ipCode) {
+        // CLI may exit 0 but print an error to stdout when daemon is down
+        if isDaemonError(stderr: ipErr, exitCode: ipCode) || isDaemonErrorText(trimmedIP) {
             return .daemonDown
         }
 
@@ -63,6 +65,23 @@ struct TailscaleHelper {
     }
 
     // MARK: - Private
+
+    private static func isValidIPv4(_ s: String) -> Bool {
+        let parts = s.split(separator: ".")
+        guard parts.count == 4 else { return false }
+        return parts.allSatisfy { part in
+            guard let n = Int(part) else { return false }
+            return n >= 0 && n <= 255
+        }
+    }
+
+    private static func isDaemonErrorText(_ s: String) -> Bool {
+        let lower = s.lowercased()
+        return lower.contains("tailscale gui failed") ||
+               lower.contains("clierror") ||
+               lower.contains("failed to start") ||
+               lower.contains("operation couldn't be completed")
+    }
 
     private static func isDaemonError(stderr: String?, exitCode: Int32) -> Bool {
         guard exitCode != 0 else { return false }
