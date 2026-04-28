@@ -235,6 +235,7 @@ mod tests {
 
     #[test]
     fn server_config_builds() {
+        let _ = rustls::crypto::ring::default_provider().install_default();
         let identity = TlsIdentity::generate(&[], &[]).unwrap();
         let config = identity.server_config();
         assert!(config.is_ok());
@@ -242,6 +243,7 @@ mod tests {
 
     #[test]
     fn client_config_builds() {
+        let _ = rustls::crypto::ring::default_provider().install_default();
         let identity = TlsIdentity::generate(&[], &[]).unwrap();
         let config = identity.client_config();
         assert!(config.is_ok());

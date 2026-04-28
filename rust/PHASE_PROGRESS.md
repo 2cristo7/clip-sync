@@ -39,3 +39,19 @@ Parallelism: 1.2+1.3 parallel, 1.4 parallel with 1.3, 1.5 depends on 1.3, 1.7 in
 Branch: feature/rust-server from dev
 All modules implemented: routes, auth, ws_hub, clipboard watcher/injector, tray.
 Fixed rustls crypto provider conflict (ring-only across workspace).
+
+---
+
+# Phase 3: Client Binary (clipsync-client)
+## Tasks
+- [x] 3.1 Client Skeleton — CLI args (clap), Cargo.toml deps, credentials module
+- [x] 3.2 Pairing Flow — mDNS discovery, TOFU cert pinning, code exchange
+- [x] 3.3 WebSocket Connector — wss:// with Bearer auth, fingerprint pinning, exponential backoff
+- [x] 3.4 Clipboard Send + Watcher — POST /inject with HMAC, polling with echo suppression
+- [x] 3.5 System Tray Client — tray-icon with status, pair/pause/resume/quit menu
+- [x] 3.6 Client Tests — 12 integration tests + 15 unit tests
+## Test Results
+104 tests passed (47 core + 15 server + 15 client unit + 12 client integration + 15 server integration), 0 failed. Clippy clean.
+## Notes
+Branch: feature/rust-client from dev
+Fixed core TLS tests (crypto provider ambiguity from aws-lc-rs pulled by tokio-tungstenite).
