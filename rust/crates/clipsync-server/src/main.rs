@@ -1,10 +1,3 @@
-mod auth;
-mod clipboard_injector;
-mod clipboard_watcher;
-mod routes;
-mod tray;
-mod ws_hub;
-
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -17,7 +10,9 @@ use clipsync_core::tls::{TlsIdentity, TlsPaths};
 use tokio::sync::RwLock;
 use tracing::{info, error};
 
-use crate::ws_hub::WsHub;
+use clipsync_server::ws_hub::WsHub;
+use clipsync_server::routes;
+use clipsync_server::AppState;
 
 /// ClipSync server — real-time clipboard synchronization over LAN/Tailscale
 #[derive(Parser, Debug)]
@@ -34,15 +29,6 @@ pub struct Cli {
     /// Disable the system tray icon
     #[arg(long)]
     pub no_tray: bool,
-}
-
-/// Shared application state accessible from all routes and background tasks.
-pub struct AppState {
-    pub token_store: RwLock<TokenStore>,
-    pub pairing_manager: RwLock<PairingManager>,
-    pub ws_hub: WsHub,
-    pub tls_identity: TlsIdentity,
-    pub data_dir: PathBuf,
 }
 
 fn default_data_dir() -> PathBuf {
