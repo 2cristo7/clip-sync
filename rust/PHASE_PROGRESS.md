@@ -55,3 +55,18 @@ Fixed rustls crypto provider conflict (ring-only across workspace).
 ## Notes
 Branch: feature/rust-client from dev
 Fixed core TLS tests (crypto provider ambiguity from aws-lc-rs pulled by tokio-tungstenite).
+
+---
+
+# Phase 4: Cross-Platform Clipboard Polish — COMPLETE
+## Tasks
+- [x] 4.1 Image Clipboard Support — TIFF→PNG (macOS), Wayland wl-paste fallback (Linux), BMP→PNG (Windows), arboard RGBA encode/decode
+- [x] 4.2 File Clipboard Support — macOS AppleScript file URL, Linux text/uri-list, Windows CF_HDROP via PowerShell, save to ~/Downloads with conflict resolution
+- [x] 4.3 Desktop Notifications — notify-rust in core, server clipboard_injector, client connector; image/file payloads trigger native toast
+## Test Results
+111 tests passed (54 core + 15 server unit + 15 server integration + 15 client unit + 12 client integration), 0 failed. Clippy clean.
+## Notes
+Branch: feature/clipboard-polish from dev
+Added deps: image 0.25 (png/tiff/bmp), notify-rust 4, to core/server/client.
+New helpers: tiff_to_png, bmp_to_png, save_received_file, mime_from_extension, url_decode.
+7 new tests in clipboard.rs (PNG roundtrip, MIME detection, URL decode, file ops, notification truncation).

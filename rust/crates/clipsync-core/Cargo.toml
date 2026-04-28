@@ -28,6 +28,8 @@ png = "0.18"
 pem = "3"
 dirs = "6"
 time = "0.3"
+image = { version = "0.25", default-features = false, features = ["png", "tiff", "bmp"] }
+notify-rust = "4"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full", "test-util"] }
