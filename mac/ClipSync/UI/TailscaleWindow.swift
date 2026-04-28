@@ -65,6 +65,9 @@ struct TailscaleSetupView: View {
                     .buttonStyle(.borderedProminent)
             }
         }
+        .onReceive(Timer.publish(every: 3, on: .main, in: .common).autoconnect()) { _ in
+            refresh()
+        }
     }
 
     private var disconnectedView: some View {
@@ -141,6 +144,9 @@ struct TailscaleSetupView: View {
                     .buttonStyle(.bordered)
                     .disabled(isRefreshing)
             }
+        }
+        .onReceive(Timer.publish(every: 3, on: .main, in: .common).autoconnect()) { _ in
+            refresh()
         }
     }
 

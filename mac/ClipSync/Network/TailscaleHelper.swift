@@ -21,41 +21,39 @@ struct TailscaleHelper {
     static func detect() -> TailscaleState {
         guard isInstalled else { return .notInstalled }
 
-        let (ipOut, ipErr, ipCode) = runCLIFull(["ip", "-4"])
-
-        // App Store CLI prints error to stdout before the IP — scan all lines
-        if let ip = extractIPv4(from: ipOut ?? "") {
-            return .connected(ip: ip)
-        }
-
-        if isDaemonError(stderr: ipErr, exitCode: ipCode) {
-            return .daemonDown
-        }
-
-        // Empty or error-only stdout with non-zero exit → daemon down
-        let trimmed = ipOut?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if !trimmed.isEmpty && ipCode != 0 {
-            return .daemonDown
-        }
-
-        // stdout empty → daemon up but VPN off; check BackendState
+        // status --json is the authoritative source — ip -4 returns cached IPs even when VPN is off
         let (statusOut, statusErr, statusCode) = runCLIFull(["status", "--json"])
+
         if isDaemonError(stderr: statusErr, exitCode: statusCode) {
             return .daemonDown
         }
 
-        if statusCode == 0, let out = statusOut,
-           let data = out.data(using: .utf8),
-           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-           let backend = json["BackendState"] as? String {
-            switch backend {
-            case "NeedsLogin": return .notLoggedIn
-            case "Stopped", "NoState": return .disconnected
-            default: break
-            }
+        guard statusCode == 0, let out = statusOut,
+              let data = out.data(using: .utf8),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let backend = json["BackendState"] as? String else {
+            return .daemonDown
         }
 
-        return .disconnected
+        switch backend {
+        case "NeedsLogin":
+            return .notLoggedIn
+        case "Running":
+            let selfNode = json["Self"] as? [String: Any]
+            let ips = selfNode?["TailscaleIPs"] as? [String] ?? []
+            if let ipv4 = ips.first(where: { $0.contains(".") && !$0.contains(":") }) {
+                return .connected(ip: ipv4)
+            }
+            // Fall back to ip -4 CLI if JSON lacks IPs
+            if let ip = ipFromCLI() {
+                return .connected(ip: ip)
+            }
+            return .connected(ip: "")
+        case "Stopped", "NoState", "Offline":
+            return .disconnected
+        default:
+            return .disconnected
+        }
     }
 
     static func openDownloadPage() {
@@ -72,6 +70,12 @@ struct TailscaleHelper {
     }
 
     // MARK: - Private
+
+    private static func ipFromCLI() -> String? {
+        let (out, _, code) = runCLIFull(["ip", "-4"])
+        guard code == 0 else { return nil }
+        return extractIPv4(from: out ?? "")
+    }
 
     private static func extractIPv4(from output: String) -> String? {
         for line in output.components(separatedBy: .newlines) {
