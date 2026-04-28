@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=ClipSync Server
+Comment=LAN clipboard sync server
+Exec=/usr/bin/clipsync-server
+Icon=clipsync-server
+Terminal=false
+Type=Application
+Categories=Utility;Network;
+StartupNotify=false

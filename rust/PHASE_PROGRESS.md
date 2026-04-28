@@ -70,3 +70,17 @@ Branch: feature/clipboard-polish from dev
 Added deps: image 0.25 (png/tiff/bmp), notify-rust 4, to core/server/client.
 New helpers: tiff_to_png, bmp_to_png, save_received_file, mime_from_extension, url_decode.
 7 new tests in clipboard.rs (PNG roundtrip, MIME detection, URL decode, file ops, notification truncation).
+
+---
+
+# Phase 5: Build, Package, and CI — COMPLETE
+## Tasks
+- [x] 5.1 Build Matrix — rust-ci.yml with 3-OS matrix (ubuntu/macos/windows), core-tests job, clippy + test + release build, artifact upload
+- [x] 5.2 Package Scripts — macOS .app bundle, Linux .deb via dpkg-deb, Windows zip via PowerShell; Info.plist, .desktop files, Makefile
+- [x] 5.3 Cross-Compilation Docs — BUILDING.md with per-platform deps, cross for ARM Linux, universal binary, CI target table
+## Test Results
+No new tests (config/script phase). 111 existing tests unaffected.
+## Notes
+Branch: chore/rust-ci from dev
+Files: .github/workflows/rust-ci.yml, rust/packaging/*, rust/BUILDING.md
+Linux CI deps: libxcb-shape0-dev, libxcb-xfixes0-dev, libgtk-3-dev, libayatana-appindicator3-dev.
