@@ -113,8 +113,11 @@ struct TailscaleSetupView: View {
 
     private func refresh() {
         isInstalled = TailscaleHelper.isInstalled
-        if isInstalled {
-            tailscaleIP = TailscaleHelper.ipv4()
+        guard isInstalled else { return }
+        // ipv4() spawns a subprocess — never block the main thread with waitUntilExit().
+        Task.detached(priority: .utility) {
+            let ip = TailscaleHelper.ipv4()
+            await MainActor.run { tailscaleIP = ip }
         }
     }
 }
