@@ -68,7 +68,7 @@ async fn pair(
 
     // Validate pairing code
     let mut pm = state.pairing_manager.write().await;
-    if let Err(_) = pm.validate_and_consume(&query.code) {
+    if pm.validate_and_consume(&query.code).is_err() {
         return Err(StatusCode::UNAUTHORIZED);
     }
 

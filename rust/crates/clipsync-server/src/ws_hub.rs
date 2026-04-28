@@ -19,11 +19,17 @@ pub struct WsHub {
     clients: Arc<RwLock<HashMap<String, WsClient>>>,
 }
 
-impl WsHub {
-    pub fn new() -> Self {
+impl Default for WsHub {
+    fn default() -> Self {
         Self {
             clients: Arc::new(RwLock::new(HashMap::new())),
         }
+    }
+}
+
+impl WsHub {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     /// Register a new client, returning its unique ID.
@@ -68,7 +74,7 @@ impl WsHub {
         let mut stale = Vec::new();
 
         for (id, client) in clients.iter() {
-            if exclude.map_or(false, |ex| ex == id) {
+            if exclude == Some(id.as_str()) {
                 continue;
             }
             if client.tx.send(json.to_string()).is_err() {

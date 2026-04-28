@@ -6,9 +6,7 @@ use crate::ws_hub::WsHub;
 
 /// Start a clipboard watcher that polls and broadcasts changes to the WebSocket hub.
 pub async fn run_clipboard_watcher(hub: WsHub) {
-    let clipboard = match SystemClipboard::new() {
-        cb => cb,
-    };
+    let clipboard = SystemClipboard::new();
     let watcher = ClipboardWatcher::new(clipboard, CLIPBOARD_POLL_MS);
     let (tx, mut rx) = tokio::sync::mpsc::channel::<ClipPayload>(32);
 

@@ -89,11 +89,7 @@ pub async fn auth_layer(
 /// Extract a Bearer token from the Authorization header.
 fn extract_bearer(headers: &axum::http::HeaderMap) -> Option<String> {
     let auth = headers.get("Authorization")?.to_str().ok()?;
-    if auth.starts_with("Bearer ") {
-        Some(auth[7..].to_string())
-    } else {
-        None
-    }
+    auth.strip_prefix("Bearer ").map(|t| t.to_string())
 }
 
 /// Return a 401 response with body "Invalid".
