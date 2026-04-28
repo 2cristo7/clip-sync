@@ -23,15 +23,17 @@ struct TailscaleHelper {
 
         let (ipOut, ipErr, ipCode) = runCLIFull(["ip", "-4"])
         let trimmedIP = ipOut?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if ipCode == 0, isValidIPv4(trimmedIP) {
+
+        if isValidIPv4(trimmedIP) {
             return .connected(ip: trimmedIP)
         }
 
-        // CLI may exit 0 but print an error to stdout when daemon is down
-        if isDaemonError(stderr: ipErr, exitCode: ipCode) || isDaemonErrorText(trimmedIP) {
+        // Non-empty but non-IP stdout → CLI printed an error (exit 0 or not)
+        if !trimmedIP.isEmpty || isDaemonError(stderr: ipErr, exitCode: ipCode) {
             return .daemonDown
         }
 
+        // Empty stdout — daemon may be up but VPN off; check BackendState
         let (statusOut, statusErr, statusCode) = runCLIFull(["status", "--json"])
         if isDaemonError(stderr: statusErr, exitCode: statusCode) {
             return .daemonDown
