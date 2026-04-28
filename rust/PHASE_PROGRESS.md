@@ -84,3 +84,17 @@ No new tests (config/script phase). 111 existing tests unaffected.
 Branch: chore/rust-ci from dev
 Files: .github/workflows/rust-ci.yml, rust/packaging/*, rust/BUILDING.md
 Linux CI deps: libxcb-shape0-dev, libxcb-xfixes0-dev, libgtk-3-dev, libayatana-appindicator3-dev.
+
+---
+
+# Phase 6: Compatibility Testing & Hardening — COMPLETE
+## Tasks
+- [x] 6.1 Protocol Conformance Tests — 19 golden-file and server endpoint tests in conformance.rs
+- [x] 6.2 Edge Case Tests — 14 hardening tests in edge_cases.rs (revocation, skew, oversized, concurrent, malformed auth)
+- [x] 6.3 Cross-Platform Interop Matrix — INTEROP_MATRIX.md with automated/manual coverage and manual checklist template
+## Test Results
+144 tests passed (54 core + 15 server unit + 19 conformance + 14 edge cases + 15 server integration + 15 client unit + 12 client integration), 0 failed. Clippy clean (no new warnings).
+## Notes
+Branch: feature/compat-tests from dev
+Added base64 + hex to server dev-dependencies for test assertions.
+Discovery: axum Json extractor has a default 2MB body limit separate from RequestBodyLimitLayer; tracked as tech debt.
