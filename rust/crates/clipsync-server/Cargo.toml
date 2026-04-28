@@ -26,6 +26,7 @@ local-ip-address = "0.6"
 dirs = "6"
 tray-icon = "0.19"
 muda = "0.15"
+notify-rust = "4"
 
 [dev-dependencies]
 reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }

@@ -156,6 +156,12 @@ async fn connect_and_listen<C: ClipboardProvider>(
                                 "received {:?} payload (nonce={})",
                                 payload.clip_type, payload.nonce
                             );
+                            // Show desktop notification for non-text content
+                            if payload.clip_type != clipsync_core::protocol::ClipType::Text {
+                                if let Err(e) = clipsync_core::clipboard::notify_received(&payload) {
+                                    warn!("notification failed: {}", e);
+                                }
+                            }
                         }
                     }
                     Err(e) => {
