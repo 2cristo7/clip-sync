@@ -261,12 +261,19 @@ class ClipForegroundService : Service() {
                 val bytes = Base64.decode(payload.data, Base64.DEFAULT)
                 val ext = IncomingClipNotifier.extensionForMime(payload.mime)
                 val uri = imageCache.writeImage(bytes, ext)
-                ClipboardWriter.lastMacWriteMs = System.currentTimeMillis()
-                ClipboardWriter.writeImage(this, uri, payload.mime)
-                shizukuManager?.let { mgr ->
-                    if (mgr.isAvailable()) lastShizukuHash = mgr.getClipboardHash()
+                val byteCount = bytes.size
+                // Dispatch clipboard write to main thread so lastMacWriteMs is set
+                // and setPrimaryClip happen in the same Looper queue as the
+                // clipChangedListener — eliminating the thread-scheduling race that
+                // allowed the listener to fire before lastMacWriteMs was visible.
+                handler.post {
+                    ClipboardWriter.lastMacWriteMs = System.currentTimeMillis()
+                    ClipboardWriter.writeImage(this@ClipForegroundService, uri, payload.mime)
+                    shizukuManager?.let { mgr ->
+                        if (mgr.isAvailable()) lastShizukuHash = mgr.getClipboardHash()
+                    }
+                    L.event(M, "image clipboard write bytes=$byteCount")
                 }
-                L.event(M, "image clipboard write bytes=${bytes.size}")
             } catch (t: Throwable) {
                 L.warn(M, "Image clipboard write failed: ${t.message}")
             }
@@ -286,9 +293,12 @@ class ClipForegroundService : Service() {
                 val fileName = payload.name ?: "clipsync_file"
                 val ext = fileName.substringAfterLast('.', "bin")
                 val uri = imageCache.writeImage(bytes, ext)
-                ClipboardWriter.lastMacWriteMs = System.currentTimeMillis()
-                ClipboardWriter.writeFile(this, uri, payload.mime)
-                L.event(M, "file written to clipboard: $fileName bytes=${bytes.size}")
+                val byteCount = bytes.size
+                handler.post {
+                    ClipboardWriter.lastMacWriteMs = System.currentTimeMillis()
+                    ClipboardWriter.writeFile(this@ClipForegroundService, uri, payload.mime)
+                    L.event(M, "file written to clipboard: $fileName bytes=$byteCount")
+                }
             } catch (t: Throwable) {
                 L.warn(M, "File clipboard write failed: ${t.message}")
             }
