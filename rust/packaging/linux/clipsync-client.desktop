@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=ClipSync Client
+Comment=LAN clipboard sync client
+Exec=/usr/bin/clipsync-client
+Icon=clipsync-client
+Terminal=false
+Type=Application
+Categories=Utility;Network;
+StartupNotify=false
