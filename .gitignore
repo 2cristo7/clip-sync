@@ -55,6 +55,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
+# ---------- Rust ----------
+rust/target/
+rust/dist/
+
 # ---------- Misc ----------
 *.log
 *.swp
