@@ -18,13 +18,31 @@ struct TailscaleHelper {
         FileManager.default.fileExists(atPath: cliPath)
     }
 
-    static func detect() -> TailscaleState {
-        guard isInstalled else { return .notInstalled }
+    private static func debugLog(_ msg: String) {
+        let line = "\(Date()): \(msg)\n"
+        let path = "/tmp/clipsync-tailscale-debug.log"
+        if let fh = FileHandle(forWritingAtPath: path) {
+            fh.seekToEndOfFile()
+            fh.write(line.data(using: .utf8)!)
+            fh.closeFile()
+        } else {
+            FileManager.default.createFile(atPath: path, contents: line.data(using: .utf8))
+        }
+    }
 
-        // status --json is the authoritative source — ip -4 returns cached IPs even when VPN is off
+    static func detect() -> TailscaleState {
+        guard isInstalled else {
+            debugLog("CLI not found at \(cliPath)")
+            return .notInstalled
+        }
+
         let (statusOut, statusErr, statusCode) = runCLIFull(["status", "--json"])
+        debugLog("exitCode=\(statusCode) stderrLen=\(statusErr?.count ?? -1) stdoutLen=\(statusOut?.count ?? -1)")
+        debugLog("stderr=\(statusErr ?? "nil")")
+        debugLog("stdout prefix=\(String((statusOut ?? "").prefix(300)))")
 
         if isDaemonError(stderr: statusErr, exitCode: statusCode) {
+            debugLog("isDaemonError=true")
             return .daemonDown
         }
 
@@ -32,8 +50,10 @@ struct TailscaleHelper {
               let data = out.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let backend = json["BackendState"] as? String else {
+            debugLog("guard failed — code=\(statusCode) hasOut=\(statusOut != nil)")
             return .daemonDown
         }
+        debugLog("BackendState=\(backend)")
 
         switch backend {
         case "NeedsLogin":
