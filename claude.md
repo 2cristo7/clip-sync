@@ -118,6 +118,35 @@ The master agent:
 
 ---
 
+# Mac Build & Install
+
+## Run locally (development)
+Open `mac/ClipSync.xcodeproj` in Xcode and press **⌘R**. This builds a Debug arm64 binary with full Xcode signing. Logs appear in the Xcode console.
+
+## Build for installation
+Run from the repo root:
+```bash
+cd mac && rm -rf build && xcodebuild build \
+  -project ClipSync.xcodeproj \
+  -scheme ClipSync \
+  -configuration Release \
+  -derivedDataPath build/DerivedData \
+  CODE_SIGN_IDENTITY="-" \
+  CODE_SIGNING_REQUIRED=YES \
+  CODE_SIGNING_ALLOWED=YES \
+  -quiet
+```
+
+## Install to /Applications
+```bash
+rm -rf /Applications/ClipSync.app && \
+cp -R mac/build/DerivedData/Build/Products/Release/ClipSync.app /Applications/ClipSync.app
+```
+
+> **Important:** always use `rm -rf` before `cp -R` — a plain `cp` over an existing `.app` produces a broken merge. The installed binary must show `flags=adhoc,runtime` (not `linker-signed`) when checked with `codesign -dvvv /Applications/ClipSync.app`.
+
+---
+
 # UI Notes
 
 - `PairingWindow` is fixed at **380×460** pt (not resizable).
