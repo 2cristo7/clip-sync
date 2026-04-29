@@ -1,6 +1,7 @@
 package com.clipsync.app
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
@@ -27,13 +28,33 @@ import com.clipsync.ui.theme.ThemeSwitchAnimator
 
 class MainActivity : ComponentActivity() {
     companion object { private const val M = "UI" }
+
+    private val deepLinkUri = mutableStateOf<Uri?>(null)
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        intent.data?.takeIf { it.scheme == "clipsync" }?.let {
+            L.event(M, "deepLink onNewIntent uri=$it")
+            deepLinkUri.value = it
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         val darkScrim = android.graphics.Color.TRANSPARENT
+        val themePrefs = getSharedPreferences("clipsync_ui", MODE_PRIVATE)
+        val initialDark = themePrefs.getBoolean("dark_mode", true)
+        val initialStyle = if (initialDark) SystemBarStyle.dark(darkScrim)
+            else SystemBarStyle.light(darkScrim, darkScrim)
         enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.dark(darkScrim),
-            navigationBarStyle = SystemBarStyle.dark(darkScrim),
+            statusBarStyle = initialStyle,
+            navigationBarStyle = initialStyle,
         )
         super.onCreate(savedInstanceState)
+
+        intent?.data?.takeIf { it.scheme == "clipsync" }?.let {
+            L.event(M, "deepLink onCreate uri=$it")
+            deepLinkUri.value = it
+        }
 
         val prefs = Prefs(applicationContext)
         if (prefs.hasPairing() && prefs.syncEnabled) {
@@ -41,9 +62,6 @@ class MainActivity : ComponentActivity() {
         }
 
         registerMacShareShortcut()
-
-        val themePrefs = getSharedPreferences("clipsync_ui", MODE_PRIVATE)
-        val initialDark = themePrefs.getBoolean("dark_mode", true)
 
         setContent {
             var isDark by rememberSaveable { mutableStateOf(initialDark) }
@@ -55,6 +73,7 @@ class MainActivity : ComponentActivity() {
                 ) {
                     SettingsScreen(
                         isDark = isDark,
+                        deepLinkUri = deepLinkUri.value,
                         onToggleTheme = { cx, cy ->
                             ThemeSwitchAnimator.animateThemeSwitch(
                                 activity = this@MainActivity,

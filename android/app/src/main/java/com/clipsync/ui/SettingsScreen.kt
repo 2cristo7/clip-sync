@@ -95,6 +95,7 @@ import com.clipsync.ui.theme.NeuToggleRow
 @Composable
 fun SettingsScreen(
     isDark: Boolean = true,
+    deepLinkUri: android.net.Uri? = null,
     onToggleTheme: (cx: Float, cy: Float) -> Unit = { _, _ -> },
     vm: SettingsViewModel = viewModel(),
 ) {
@@ -109,6 +110,16 @@ fun SettingsScreen(
     ) { granted -> vm.onMediaPermissionResult(granted) }
 
     LaunchedEffect(Unit) { vm.bootstrap(context) }
+
+    LaunchedEffect(deepLinkUri) {
+        val uri = deepLinkUri ?: return@LaunchedEffect
+        if (uri.scheme == "clipsync" && uri.host == "pair") {
+            val host = uri.getQueryParameter("host") ?: return@LaunchedEffect
+            val port = uri.getQueryParameter("port")?.toIntOrNull() ?: 7010
+            val code = uri.getQueryParameter("code") ?: return@LaunchedEffect
+            vm.pair(context, PairingTarget.Manual(host, port), code)
+        }
+    }
 
     val lifecycleOwner = context as? androidx.lifecycle.LifecycleOwner
     DisposableEffect(lifecycleOwner) {
