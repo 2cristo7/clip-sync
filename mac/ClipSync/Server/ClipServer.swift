@@ -19,7 +19,7 @@ final class ClipServer {
     private let hmacValidator: HMACValidator
     private let tlsConfiguration: TLSConfiguration?
     private var runTask: Task<Void, Never>?
-    var onStartupError: ((Error) -> Void)?
+    private let errorStore: ErrorStore
 
     init(config: ServerConfig = .default,
          hub: WebSocketHub,
@@ -27,7 +27,8 @@ final class ClipServer {
          pairing: PairingManager,
          tokenStore: TokenStore,
          hmacValidator: HMACValidator,
-         tlsConfiguration: TLSConfiguration? = nil) {
+         tlsConfiguration: TLSConfiguration? = nil,
+         errorStore: ErrorStore) {
         self.config = config
         var logger = Logger(label: "clipsync.server")
         logger.logLevel = config.logLevel
@@ -38,6 +39,7 @@ final class ClipServer {
         self.tokenStore = tokenStore
         self.hmacValidator = hmacValidator
         self.tlsConfiguration = tlsConfiguration
+        self.errorStore = errorStore
     }
 
     func start() {
@@ -50,6 +52,7 @@ final class ClipServer {
         let tokenStore = self.tokenStore
         let hmacValidator = self.hmacValidator
         let tlsConfiguration = self.tlsConfiguration
+        let errorStore = self.errorStore
 
         runTask = Task.detached(priority: .userInitiated) {
             do {
@@ -105,8 +108,26 @@ final class ClipServer {
                 try await app.runService()
             } catch {
                 Self.logStartupError(error, config: config, logger: logger)
-                await MainActor.run { [weak self] in
-                    self?.onStartupError?(error)
+                let description = String(describing: error)
+                let isPortInUse = description.contains("addressInUse")
+                    || description.contains("EADDRINUSE")
+                    || description.localizedCaseInsensitiveContains("address already in use")
+                await MainActor.run {
+                    if isPortInUse {
+                        errorStore.append(AppError(
+                            severity: .error,
+                            summary: "Port \(config.port) already in use",
+                            detail: error.localizedDescription,
+                            suggestion: "Close other ClipSync instances or change the port."
+                        ))
+                    } else {
+                        errorStore.append(AppError(
+                            severity: .error,
+                            summary: "Server failed to start",
+                            detail: error.localizedDescription,
+                            suggestion: "Check the logs and restart ClipSync."
+                        ))
+                    }
                 }
             }
         }

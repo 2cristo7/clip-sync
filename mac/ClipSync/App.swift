@@ -18,7 +18,7 @@ struct ClipSyncApp: App {
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private let hub = WebSocketHub()
+    private lazy var hub = WebSocketHub(errorStore: errorStore)
     private let watcher = PasteboardWatcher()
     private lazy var injector = PasteboardInjector(watcher: watcher)
     private let keychain = Keychain()
@@ -73,7 +73,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             pairing: pairing,
             tokenStore: tokenStore,
             hmacValidator: hmacValidator,
-            tlsConfiguration: tlsConfig
+            tlsConfiguration: tlsConfig,
+            errorStore: errorStore
         )
         self.server = server
         startPipeline()
@@ -98,14 +99,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         watcher.start()
-        server?.onStartupError = { [weak self] error in
-            self?.errorStore.append(AppError(
-                severity: .error,
-                summary: "Server failed to start",
-                detail: error.localizedDescription,
-                suggestion: "Check the logs and restart ClipSync."
-            ))
-        }
         server?.start()
     }
 

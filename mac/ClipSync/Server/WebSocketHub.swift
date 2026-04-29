@@ -38,9 +38,13 @@ actor WebSocketHub {
     private var clients: Set<Client> = []
     private var continuations: [UUID: AsyncStream<[ClipClientInfo]>.Continuation] = [:]
     private var logger: Logger
+    let errorStore: ErrorStore
+    private var lastDisconnectErrorTime: Date?
 
-    init(logger: Logger = Logger(label: "clipsync.ws.hub")) {
+    init(logger: Logger = Logger(label: "clipsync.ws.hub"),
+         errorStore: ErrorStore) {
         self.logger = logger
+        self.errorStore = errorStore
     }
 
     var clientCount: Int { clients.count }
@@ -124,6 +128,19 @@ actor WebSocketHub {
                 ])
                 clients.remove(client)
                 didChange = true
+                let now = Date()
+                if lastDisconnectErrorTime == nil || now.timeIntervalSince(lastDisconnectErrorTime!) > 5 {
+                    lastDisconnectErrorTime = now
+                    let store = errorStore
+                    Task { @MainActor in
+                        store.append(AppError(
+                            severity: .warning,
+                            summary: "Device disconnected",
+                            detail: "WebSocket write failed for client",
+                            suggestion: "The device will reconnect automatically."
+                        ))
+                    }
+                }
             }
         }
         if didChange { notifyChange() }
