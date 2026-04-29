@@ -251,3 +251,18 @@ private func subjectKeyIdentifier(for publicKey: Certificate.PublicKey) -> [UInt
     let digest = SHA256.hash(data: serializer.serializedBytes)
     return Array(digest.prefix(20))
 }
+
+extension TLSManagerError: LocalizedError {
+    var errorDescription: String? {
+        switch self {
+        case .serializationFailed: return "Failed to serialize TLS certificate"
+        case .storageFailed: return "Failed to store TLS certificate in Keychain"
+        }
+    }
+    var recoverySuggestion: String? {
+        switch self {
+        case .serializationFailed: return "Restart ClipSync. If the problem persists, delete ClipSync items in Keychain Access."
+        case .storageFailed: return "Check Keychain Access permissions. Restart your Mac if error -34018 appears."
+        }
+    }
+}

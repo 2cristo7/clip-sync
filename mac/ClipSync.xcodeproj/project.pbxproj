@@ -42,6 +42,7 @@
 		A00000000000000000002402 /* ReachabilityMonitorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000002401 /* ReachabilityMonitorTests.swift */; };
 		A00000000000000000002502 /* TailscaleHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000002501 /* TailscaleHelper.swift */; };
 		A00000000000000000002504 /* TailscaleWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000002503 /* TailscaleWindow.swift */; };
+		A00000000000000000002602 /* ErrorState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000002601 /* ErrorState.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -88,6 +89,7 @@
 		A00000000000000000002401 /* ReachabilityMonitorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReachabilityMonitorTests.swift; sourceTree = "<group>"; };
 		A00000000000000000002501 /* TailscaleHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TailscaleHelper.swift; sourceTree = "<group>"; };
 		A00000000000000000002503 /* TailscaleWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TailscaleWindow.swift; sourceTree = "<group>"; };
+		A00000000000000000002601 /* ErrorState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorState.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -218,6 +220,7 @@
 			children = (
 				A00000000000000000001301 /* MenuBarController.swift */,
 				A00000000000000000001401 /* PairingWindow.swift */,
+				A00000000000000000002601 /* ErrorState.swift */,
 				A00000000000000000002503 /* TailscaleWindow.swift */,
 			);
 			path = UI;
@@ -354,6 +357,7 @@
 				A00000000000000000001302 /* MenuBarController.swift in Sources */,
 				A00000000000000000001102 /* PairingManager.swift in Sources */,
 				A00000000000000000001402 /* PairingWindow.swift in Sources */,
+				A00000000000000000002602 /* ErrorState.swift in Sources */,
 				A00000000000000000000506 /* PasteboardInjector.swift in Sources */,
 				A00000000000000000000504 /* PasteboardWatcher.swift in Sources */,
 				A00000000000000000002302 /* ReachabilityMonitor.swift in Sources */,
