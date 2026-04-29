@@ -19,6 +19,9 @@ import android.provider.Settings
 import com.clipsync.service.ClipForegroundService
 import com.clipsync.shizuku.ShizukuClipboardManager
 import com.clipsync.storage.Prefs
+import com.clipsync.model.AppError
+import com.clipsync.model.ErrorAction
+import com.clipsync.model.ErrorSeverity
 import com.clipsync.util.L
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -73,7 +76,7 @@ data class SettingsState(
     val isOnMobileData: Boolean = false,
     val isOnWifi: Boolean = false,
     val isTailscaleVpnActive: Boolean = false,
-    val error: String? = null
+    val errors: List<AppError> = emptyList()
 )
 
 class SettingsViewModel : ViewModel() {
@@ -83,6 +86,14 @@ class SettingsViewModel : ViewModel() {
 
     private var discoveryJob: Job? = null
     private var networkWatchJob: Job? = null
+
+    private fun addError(error: AppError) {
+        _state.value = _state.value.copy(errors = _state.value.errors + error)
+    }
+
+    fun dismissError(id: String) {
+        _state.value = _state.value.copy(errors = _state.value.errors.filter { it.id != id })
+    }
 
     fun bootstrap(context: Context) {
         try {
@@ -152,9 +163,15 @@ class SettingsViewModel : ViewModel() {
         if (isTailscaleHost(host) && !_state.value.isTailscaleVpnActive) {
             L.warn(M, "startSync blocked: Tailscale IP but VPN not active")
             _state.value = _state.value.copy(
-                status = ConnectionStatus.Error("Tailscale VPN is not active. Open Tailscale first."),
-                error = "Tailscale VPN is not active. Open Tailscale first."
+                status = ConnectionStatus.Error("Tailscale VPN is not active. Open Tailscale first.")
             )
+            addError(AppError(
+                severity = ErrorSeverity.ERROR,
+                summary = "Tailscale VPN is not active",
+                detail = "The host $host is a Tailscale address but the VPN is not connected.",
+                suggestion = "Open Tailscale and connect, then try again.",
+                action = ErrorAction.Retry,
+            ))
             return
         }
 
@@ -191,7 +208,7 @@ class SettingsViewModel : ViewModel() {
             pairedPort = 7010,
             syncEnabled = false,
             status = ConnectionStatus.Disconnected,
-            error = null
+            errors = emptyList()
         )
     }
 
@@ -222,14 +239,20 @@ class SettingsViewModel : ViewModel() {
         if (target is PairingTarget.Manual && isTailscaleHost(target.host) && !_state.value.isTailscaleVpnActive) {
             L.warn(M, "pair blocked: Tailscale IP but VPN not active")
             _state.value = _state.value.copy(
-                status = ConnectionStatus.Error("Tailscale VPN is not active. Open Tailscale first."),
-                error = "Tailscale VPN is not active. Open Tailscale first."
+                status = ConnectionStatus.Error("Tailscale VPN is not active. Open Tailscale first.")
             )
+            addError(AppError(
+                severity = ErrorSeverity.ERROR,
+                summary = "Tailscale VPN is not active",
+                detail = "The host ${target.host} is a Tailscale address but the VPN is not connected.",
+                suggestion = "Open Tailscale and connect, then try again.",
+                action = ErrorAction.Retry,
+            ))
             return
         }
 
         viewModelScope.launch {
-            _state.value = _state.value.copy(status = ConnectionStatus.Connecting, error = null)
+            _state.value = _state.value.copy(status = ConnectionStatus.Connecting, errors = emptyList())
             try {
                 val prefs = Prefs(context)
                 val api = PairingApi()
@@ -259,10 +282,17 @@ class SettingsViewModel : ViewModel() {
                 }
             } catch (t: Throwable) {
                 L.error(M, "pair failed", t)
+                val errMsg = t.message ?: "unknown error"
                 _state.value = _state.value.copy(
-                    status = ConnectionStatus.Error(t.message ?: "unknown"),
-                    error = t.message
+                    status = ConnectionStatus.Error(errMsg)
                 )
+                addError(AppError(
+                    severity = ErrorSeverity.ERROR,
+                    summary = "Pairing failed",
+                    detail = errMsg,
+                    suggestion = "Check the pairing code and make sure the Mac is reachable.",
+                    action = ErrorAction.Retry,
+                ))
             }
         }
     }
@@ -292,7 +322,7 @@ class SettingsViewModel : ViewModel() {
             pairedPort = port,
             mode = mode,
             status = ConnectionStatus.Connecting,
-            error = null
+            errors = emptyList()
         )
         ClipForegroundService.start(context)
         val alive = withContext(Dispatchers.IO) { PairingApi().ping(host, port, fp) }
