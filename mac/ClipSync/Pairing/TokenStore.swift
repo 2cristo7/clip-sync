@@ -111,6 +111,9 @@ actor TokenStore {
             records = Dictionary(uniqueKeysWithValues: decoded.map { ($0.id, $0) })
         } catch KeychainError.notFound {
             records = [:]
+        } catch {
+            // Corrupted or unreadable data — start fresh rather than crash.
+            records = [:]
         }
         loaded = true
     }

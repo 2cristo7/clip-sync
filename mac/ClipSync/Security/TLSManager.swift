@@ -200,7 +200,7 @@ final class TLSManager: @unchecked Sendable {
         return addrs
     }
 
-    private static func primaryIPv4Address() -> String? {
+    static func primaryIPv4Address() -> String? {
         var ifaddr: UnsafeMutablePointer<ifaddrs>? = nil
         guard getifaddrs(&ifaddr) == 0, let first = ifaddr else { return nil }
         defer { freeifaddrs(ifaddr) }

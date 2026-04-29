@@ -173,6 +173,9 @@ final class ClipServer {
                     "reason": .string(String(describing: error)),
                 ])
                 throw HTTPError(.unauthorized, message: String(describing: error))
+            } catch {
+                context.logger.error("pair failed: \(error)")
+                throw HTTPError(.internalServerError, message: String(describing: error))
             }
         }
         return router

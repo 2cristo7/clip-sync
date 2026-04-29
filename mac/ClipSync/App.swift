@@ -94,15 +94,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func startAdvertising() {
-        let fp = tlsManager.spkiFingerprint.isEmpty
-            ? PairingManager.fingerprint(of: pairingSecret)
-            : tlsManager.spkiFingerprint
         let name = Self.deviceName()
-        let txt: [String: String] = [
+        var txt: [String: String] = [
             "version": "0.1.0",
             "name": name,
-            "fp": fp,
         ]
+        if !tlsManager.spkiFingerprint.isEmpty {
+            txt["fp"] = tlsManager.spkiFingerprint
+        }
         let advertiser = BonjourAdvertiser(
             port: Int32(ServerConfig.default.port),
             serviceName: name,
@@ -144,7 +143,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 } else {
                     session = try await pairing.startPairing()
                 }
-                let hostname = ProcessInfo.processInfo.hostName
+                let hostname = TLSManager.primaryIPv4Address() ?? ProcessInfo.processInfo.hostName
                 pairingWindow.show(
                     code: session.code,
                     expiresAt: session.expiresAt,
