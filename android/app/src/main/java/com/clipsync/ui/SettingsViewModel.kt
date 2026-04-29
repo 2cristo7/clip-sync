@@ -12,6 +12,7 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import androidx.core.content.ContextCompat
 import com.clipsync.discovery.Discovered
+import com.clipsync.discovery.DiscoveryEvent
 import com.clipsync.discovery.NsdDiscovery
 import com.clipsync.net.PairingApi
 import android.content.Intent
@@ -124,12 +125,25 @@ class SettingsViewModel : ViewModel() {
                 val port = prefs.port
                 val fp = prefs.fp ?: return
                 viewModelScope.launch {
-                    val alive = withContext(Dispatchers.IO) {
+                    val result = withContext(Dispatchers.IO) {
                         PairingApi().ping(host, port, fp)
                     }
-                    _state.value = _state.value.copy(
-                        status = if (alive) ConnectionStatus.Connected(host)
-                                 else ConnectionStatus.Disconnected
+                    result.fold(
+                        onSuccess = { alive ->
+                            _state.value = _state.value.copy(
+                                status = if (alive) ConnectionStatus.Connected(host)
+                                         else ConnectionStatus.Disconnected
+                            )
+                        },
+                        onFailure = { error ->
+                            _state.value = _state.value.copy(status = ConnectionStatus.Disconnected)
+                            addError(AppError(
+                                severity = ErrorSeverity.WARNING,
+                                summary = "Server not responding",
+                                detail = error.message,
+                                suggestion = "Check that the Mac is running ClipSync.",
+                            ))
+                        }
                     )
                 }
             }
@@ -187,13 +201,32 @@ class SettingsViewModel : ViewModel() {
         ClipForegroundService.start(context)
 
         viewModelScope.launch {
-            val alive = if (fp != null) {
-                withContext(Dispatchers.IO) { PairingApi().ping(host, port, fp) }
-            } else false
-            _state.value = _state.value.copy(
-                status = if (alive) ConnectionStatus.Connected(host)
-                         else ConnectionStatus.Error("Could not reach $host")
-            )
+            if (fp != null) {
+                val result = withContext(Dispatchers.IO) { PairingApi().ping(host, port, fp) }
+                result.fold(
+                    onSuccess = { alive ->
+                        _state.value = _state.value.copy(
+                            status = if (alive) ConnectionStatus.Connected(host)
+                                     else ConnectionStatus.Error("Could not reach $host")
+                        )
+                    },
+                    onFailure = { error ->
+                        _state.value = _state.value.copy(
+                            status = ConnectionStatus.Error("Could not reach $host")
+                        )
+                        addError(AppError(
+                            severity = ErrorSeverity.WARNING,
+                            summary = "Server not responding",
+                            detail = error.message,
+                            suggestion = "Check that the Mac is running ClipSync.",
+                        ))
+                    }
+                )
+            } else {
+                _state.value = _state.value.copy(
+                    status = ConnectionStatus.Error("Could not reach $host")
+                )
+            }
         }
     }
 
@@ -224,11 +257,30 @@ class SettingsViewModel : ViewModel() {
         val nsd = NsdDiscovery(context)
         discoveryJob = viewModelScope.launch(Dispatchers.IO) {
             try {
-                nsd.discover().collect { d ->
-                    val isNew = _state.value.discovered.none { it.name == d.name }
-                    if (isNew) L.event(M, "discovery found name=${d.name} host=${d.host}:${d.port}")
-                    val merged = (_state.value.discovered + d).distinctBy { it.name }
-                    _state.value = _state.value.copy(discovered = merged)
+                nsd.discover().collect { event ->
+                    when (event) {
+                        is DiscoveryEvent.Found -> {
+                            val d = event.info
+                            val isNew = _state.value.discovered.none { it.name == d.name }
+                            if (isNew) L.event(M, "discovery found name=${d.name} host=${d.host}:${d.port}")
+                            val merged = (_state.value.discovered + d).distinctBy { it.name }
+                            _state.value = _state.value.copy(discovered = merged)
+                        }
+                        is DiscoveryEvent.Lost -> {
+                            val filtered = _state.value.discovered.filter { it.name != event.name }
+                            _state.value = _state.value.copy(discovered = filtered)
+                            L.event(M, "discovery lost name=${event.name}")
+                        }
+                        is DiscoveryEvent.Error -> {
+                            L.warn(M, "discovery error: ${event.message}")
+                            addError(AppError(
+                                severity = ErrorSeverity.WARNING,
+                                summary = "Can't find servers on network",
+                                detail = event.message,
+                                suggestion = "Check that both devices are on the same Wi-Fi network.",
+                            ))
+                        }
+                    }
                 }
             } catch (t: Throwable) {
                 L.warn(M, "discovery crashed: ${t.message}")
@@ -357,10 +409,25 @@ class SettingsViewModel : ViewModel() {
             errors = emptyList()
         )
         ClipForegroundService.start(context)
-        val alive = withContext(Dispatchers.IO) { PairingApi().ping(host, port, fp) }
-        _state.value = _state.value.copy(
-            status = if (alive) ConnectionStatus.Connected(host)
-                     else ConnectionStatus.Error("Paired but could not verify connection to $host")
+        val pingResult = withContext(Dispatchers.IO) { PairingApi().ping(host, port, fp) }
+        pingResult.fold(
+            onSuccess = { alive ->
+                _state.value = _state.value.copy(
+                    status = if (alive) ConnectionStatus.Connected(host)
+                             else ConnectionStatus.Error("Paired but could not verify connection to $host")
+                )
+            },
+            onFailure = { error ->
+                _state.value = _state.value.copy(
+                    status = ConnectionStatus.Error("Paired but could not verify connection to $host")
+                )
+                addError(AppError(
+                    severity = ErrorSeverity.WARNING,
+                    summary = "Server not responding",
+                    detail = error.message,
+                    suggestion = "Check that the Mac is running ClipSync.",
+                ))
+            }
         )
     }
 
