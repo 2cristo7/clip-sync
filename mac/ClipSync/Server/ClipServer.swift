@@ -114,14 +114,14 @@ final class ClipServer {
                     || description.localizedCaseInsensitiveContains("address already in use")
                 await MainActor.run {
                     if isPortInUse {
-                        errorStore.append(AppError(
+                        errorStore.appendAndNotify(AppError(
                             severity: .error,
                             summary: "Port \(config.port) already in use",
                             detail: error.localizedDescription,
                             suggestion: "Close other ClipSync instances or change the port."
                         ))
                     } else {
-                        errorStore.append(AppError(
+                        errorStore.appendAndNotify(AppError(
                             severity: .error,
                             summary: "Server failed to start",
                             detail: error.localizedDescription,

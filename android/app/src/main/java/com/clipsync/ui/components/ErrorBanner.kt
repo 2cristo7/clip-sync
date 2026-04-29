@@ -14,8 +14,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import android.content.Context
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Icon
@@ -31,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -107,6 +110,7 @@ fun ErrorBanner(
 
         // Expanded detail section
         if (expanded) {
+            val context = LocalContext.current
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 error.detail?.let {
                     Text(
@@ -122,6 +126,32 @@ fun ErrorBanner(
                         style = MaterialTheme.typography.bodySmall,
                         fontWeight = FontWeight.Medium,
                     )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    IconButton(
+                        onClick = {
+                            val clipboardManager =
+                                context.getSystemService(Context.CLIPBOARD_SERVICE)
+                                    as android.content.ClipboardManager
+                            clipboardManager.setPrimaryClip(
+                                android.content.ClipData.newPlainText(
+                                    "ClipSync Error",
+                                    "${error.summary}\n${error.detail.orEmpty()}\n${error.suggestion.orEmpty()}"
+                                )
+                            )
+                        },
+                        modifier = Modifier.size(28.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.ContentCopy,
+                            contentDescription = "Copy error",
+                            tint = NeuColors.TextSecondary,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
                 }
             }
         }

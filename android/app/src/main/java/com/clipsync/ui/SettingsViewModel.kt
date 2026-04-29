@@ -89,7 +89,8 @@ class SettingsViewModel : ViewModel() {
     private var networkWatchJob: Job? = null
 
     private fun addError(error: AppError) {
-        _state.value = _state.value.copy(errors = _state.value.errors + error)
+        val current = _state.value.errors + error
+        _state.value = _state.value.copy(errors = current.takeLast(10))
     }
 
     fun dismissError(id: String) {
