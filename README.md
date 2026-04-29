@@ -97,19 +97,31 @@
 
 ## How it works
 
-```
-┌─────────────────────────────────────┐     WebSocket / HTTPS (port 7010)
-│         macOS menu bar app          │◄────────────────────────────────────►│  Android app  │
-│                                     │                                       │               │
-│  PasteboardWatcher → ClipServer     │  ── clipboard changed ──►            │ ClipClient    │
-│  PasteboardInjector ← WebSocketHub  │  ◄── POST /inject ────────           │ ClipSender    │
-└─────────────────────────────────────┘                                       └───────────────┘
+```mermaid
+flowchart LR
+    subgraph Mac["🖥️ macOS menu bar app"]
+        PW[PasteboardWatcher]
+        CS[ClipServer :7010]
+        PI[PasteboardInjector]
+        WH[WebSocketHub]
+    end
 
-  TLS (SPKI pinned)  +  Bearer token  +  HMAC-SHA256 per payload
-  mDNS (_clipsync._tcp) for auto-discovery on LAN
+    subgraph Android["📱 Android app"]
+        CC[ClipClient]
+        CSend[ClipSender]
+    end
+
+    PW -- clipboard changed --> CS
+    CS -- WebSocket push --> CC
+    CSend -- POST /inject --> CS
+    CS --> PI
+
+    Mac <-->|"TLS · Bearer token · HMAC-SHA256"| Android
 ```
 
-**Pairing** uses a TOFU (trust on first use) model: the Mac displays a 6-digit code; the Android app calls `GET /pair?code=XXXX` and receives a bearer token + HMAC secret, both stored in encrypted storage.
+> Auto-discovery via mDNS `_clipsync._tcp` on LAN · manual IP for Tailscale
+
+**Pairing** uses a TOFU (trust on first use) model: the Mac displays a 6-digit code (or QR); the Android app calls `GET /pair?code=XXXX` and receives a bearer token + HMAC secret, both stored in encrypted storage.
 
 ---
 
