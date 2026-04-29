@@ -1,6 +1,10 @@
-# ClipSync
+<div align="center">
+  <img src="docs/screenshots/logo.png" width="128" alt="ClipSync logo" />
+  <h1>ClipSync</h1>
+  <p>Real-time clipboard sync between macOS and Android — over LAN or Tailscale.</p>
+</div>
 
-Real-time clipboard synchronisation between macOS and Android over a local network or Tailscale.
+---
 
 ## What it does
 
@@ -23,6 +27,71 @@ Real-time clipboard synchronisation between macOS and Android over a local netwo
 ### In the code but not currently surfaced
 
 - **Floating FAB overlay** (`ClipOverlayManager`) — a persistent bubble that floats over any Android app and pushes the clipboard to the Mac on tap. The implementation is complete but disabled in the current UI; it can be re-enabled.
+
+---
+
+## Screenshots
+
+### macOS
+
+<table>
+  <tr>
+    <td align="center">
+      <img src="docs/screenshots/mac-menu-bar.png" width="200" alt="Menu bar" /><br/>
+      <sub>Menu bar</sub>
+    </td>
+    <td align="center">
+      <img src="docs/screenshots/mac-pair-device.png" width="200" alt="Pair Device — QR + 6-digit code" /><br/>
+      <sub>Pair Device</sub>
+    </td>
+    <td align="center">
+      <img src="docs/screenshots/mac-tailscale-connected.png" width="200" alt="Tailscale connected" /><br/>
+      <sub>Tailscale connected</sub>
+    </td>
+    <td align="center">
+      <img src="docs/screenshots/mac-tailscale-disconnected.png" width="200" alt="Tailscale VPN off" /><br/>
+      <sub>Tailscale VPN off</sub>
+    </td>
+  </tr>
+</table>
+
+### Android — WiFi (LAN auto-discovery)
+
+<table>
+  <tr>
+    <td align="center">
+      <img src="docs/screenshots/android-settings-light.png" width="200" alt="Settings — light" /><br/>
+      <sub>Light mode</sub>
+    </td>
+    <td align="center">
+      <img src="docs/screenshots/android-settings-dark.png" width="200" alt="Settings — dark" /><br/>
+      <sub>Dark mode</sub>
+    </td>
+  </tr>
+</table>
+
+### Android — Tailscale (VPN, manual IP)
+
+<table>
+  <tr>
+    <td align="center">
+      <img src="docs/screenshots/android-tailscale-light.png" width="200" alt="Tailscale connected — light" /><br/>
+      <sub>Connected — light</sub>
+    </td>
+    <td align="center">
+      <img src="docs/screenshots/android-tailscale-dark.png" width="200" alt="Tailscale connected — dark" /><br/>
+      <sub>Connected — dark</sub>
+    </td>
+    <td align="center">
+      <img src="docs/screenshots/android-tailscale-manual-light.png" width="200" alt="Manual IP entry — light" /><br/>
+      <sub>Manual IP — light</sub>
+    </td>
+    <td align="center">
+      <img src="docs/screenshots/android-tailscale-manual-dark.png" width="200" alt="Manual IP entry — dark" /><br/>
+      <sub>Manual IP — dark</sub>
+    </td>
+  </tr>
+</table>
 
 ---
 
@@ -102,6 +171,7 @@ clip-sync/
 │       └── com/clipsync/         source code (22 Kotlin files)
 └── docs/
     ├── installation.md           full setup guide ← start here
+    ├── screenshots/              UI screenshots
     ├── architecture/
     │   ├── protocol.md           wire protocol reference
     │   ├── security.md           security model
