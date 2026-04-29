@@ -135,6 +135,13 @@ class SettingsViewModel : ViewModel() {
             }
         } catch (t: Throwable) {
             L.error(M, "bootstrap failed reading prefs", t)
+            addError(AppError(
+                severity = ErrorSeverity.ERROR,
+                summary = "Startup failed",
+                detail = t.stackTraceToString().take(500),
+                suggestion = "Restart the app. If the problem persists, try clearing app data.",
+                action = ErrorAction.Retry,
+            ))
         }
     }
 
@@ -225,6 +232,12 @@ class SettingsViewModel : ViewModel() {
                 }
             } catch (t: Throwable) {
                 L.warn(M, "discovery crashed: ${t.message}")
+                addError(AppError(
+                    severity = ErrorSeverity.WARNING,
+                    summary = "Network discovery interrupted",
+                    detail = t.message,
+                    suggestion = "Discovery will restart on next network change.",
+                ))
             }
         }
     }
@@ -282,17 +295,36 @@ class SettingsViewModel : ViewModel() {
                 }
             } catch (t: Throwable) {
                 L.error(M, "pair failed", t)
-                val errMsg = t.message ?: "unknown error"
+                val appError = when {
+                    t is javax.net.ssl.SSLHandshakeException ->
+                        AppError(
+                            severity = ErrorSeverity.ERROR,
+                            summary = "Certificate mismatch",
+                            detail = t.message,
+                            suggestion = "The Mac app regenerated its certificate. Re-pair to fix.",
+                            action = ErrorAction.Repair,
+                        )
+                    t is java.net.ConnectException ->
+                        AppError(
+                            severity = ErrorSeverity.ERROR,
+                            summary = "Server unreachable",
+                            detail = t.message,
+                            suggestion = "Check that both devices are on the same network.",
+                            action = ErrorAction.Retry,
+                        )
+                    else ->
+                        AppError(
+                            severity = ErrorSeverity.ERROR,
+                            summary = "Connection failed",
+                            detail = t.message ?: "Unknown error",
+                            suggestion = "Try again.",
+                            action = ErrorAction.Retry,
+                        )
+                }
                 _state.value = _state.value.copy(
-                    status = ConnectionStatus.Error(errMsg)
+                    status = ConnectionStatus.Error(appError.summary)
                 )
-                addError(AppError(
-                    severity = ErrorSeverity.ERROR,
-                    summary = "Pairing failed",
-                    detail = errMsg,
-                    suggestion = "Check the pairing code and make sure the Mac is reachable.",
-                    action = ErrorAction.Retry,
-                ))
+                addError(appError)
             }
         }
     }
@@ -499,6 +531,12 @@ class SettingsViewModel : ViewModel() {
             Shizuku.requestPermission(ShizukuClipboardManager.PERMISSION_REQUEST_CODE)
         } catch (e: Exception) {
             L.warn(M, "requestShizukuPermission failed: ${e.message}")
+            addError(AppError(
+                severity = ErrorSeverity.WARNING,
+                summary = "Shizuku permission request failed",
+                detail = e.message,
+                suggestion = "Make sure Shizuku is running. Open Shizuku app and start the service.",
+            ))
         }
     }
 
