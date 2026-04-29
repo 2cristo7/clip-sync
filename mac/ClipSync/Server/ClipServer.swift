@@ -19,6 +19,7 @@ final class ClipServer {
     private let hmacValidator: HMACValidator
     private let tlsConfiguration: TLSConfiguration?
     private var runTask: Task<Void, Never>?
+    var onStartupError: ((Error) -> Void)?
 
     init(config: ServerConfig = .default,
          hub: WebSocketHub,
@@ -104,6 +105,9 @@ final class ClipServer {
                 try await app.runService()
             } catch {
                 Self.logStartupError(error, config: config, logger: logger)
+                await MainActor.run { [weak self] in
+                    self?.onStartupError?(error)
+                }
             }
         }
     }

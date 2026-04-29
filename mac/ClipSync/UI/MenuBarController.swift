@@ -1,39 +1,70 @@
 import AppKit
+import Combine
 import Foundation
 
 @MainActor
 final class MenuBarController: NSObject {
     private var statusItem: NSStatusItem?
     private let hub: WebSocketHub
+    let errorStore: ErrorStore
     private let onStartPairing: () -> Void
     private let onTailscale: () -> Void
     private let onQuit: () -> Void
     private var refreshTask: Task<Void, Never>?
     private var currentClients: [ClipClientInfo] = []
+    private var cancellables = Set<AnyCancellable>()
 
     init(hub: WebSocketHub,
+         errorStore: ErrorStore,
          onStartPairing: @escaping () -> Void,
          onTailscale: @escaping () -> Void,
          onQuit: @escaping () -> Void) {
         self.hub = hub
+        self.errorStore = errorStore
         self.onStartPairing = onStartPairing
         self.onTailscale = onTailscale
         self.onQuit = onQuit
+        super.init()
+        errorStore.$errors
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.rebuildMenu() }
+            .store(in: &cancellables)
     }
 
     func install() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        if let button = item.button {
+        statusItem = item
+        rebuildMenu()
+        startObservingHub()
+    }
+
+    private func updateStatusIcon() {
+        guard let button = statusItem?.button else { return }
+        if errorStore.hasErrors {
+            let image = NSImage(
+                systemSymbolName: "exclamationmark.circle.fill",
+                accessibilityDescription: "ClipSync — Error"
+            )
+            image?.isTemplate = false
+            button.image = image
+            button.contentTintColor = .systemRed
+        } else if errorStore.hasWarnings {
+            let image = NSImage(
+                systemSymbolName: "exclamationmark.circle.fill",
+                accessibilityDescription: "ClipSync — Warning"
+            )
+            image?.isTemplate = false
+            button.image = image
+            button.contentTintColor = .systemOrange
+        } else {
             let image = NSImage(
                 systemSymbolName: "doc.on.clipboard",
                 accessibilityDescription: "ClipSync"
             )
             image?.isTemplate = true
             button.image = image
+            button.contentTintColor = nil
         }
-        statusItem = item
-        rebuildMenu()
-        startObservingHub()
     }
 
     func tearDown() {
@@ -59,7 +90,21 @@ final class MenuBarController: NSObject {
     }
 
     private func rebuildMenu() {
+        updateStatusIcon()
         let menu = NSMenu()
+
+        // Error/warning items at the top
+        let currentErrors = errorStore.errors
+        if !currentErrors.isEmpty {
+            for appError in currentErrors {
+                let prefix = appError.severity == .error ? "🔴 " : "⚠ "
+                let item = NSMenuItem(title: prefix + appError.summary, action: nil, keyEquivalent: "")
+                item.isEnabled = false
+                menu.addItem(item)
+            }
+            menu.addItem(.separator())
+        }
+
         let statusText: String = currentClients.isEmpty
             ? "⚪️ Idle"
             : "🟢 Connected (\(currentClients.count))"

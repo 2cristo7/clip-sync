@@ -28,8 +28,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let tlsManager = TLSManager()
     private lazy var hmacValidator = HMACValidator(secret: pairingSecret)
     private var server: ClipServer?
+    let errorStore = ErrorStore()
     private lazy var menuBar = MenuBarController(
         hub: hub,
+        errorStore: errorStore,
         onStartPairing: { [weak self] in self?.startPairing() },
         onTailscale: { [weak self] in self?.showTailscale() },
         onQuit: { NSApp.terminate(nil) }
@@ -57,6 +59,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             tlsConfig = try tlsManager.makeServerTLSConfiguration()
         } catch {
             logger.error("Failed to initialise TLS identity: \(error)")
+            errorStore.append(AppError(
+                severity: .warning,
+                summary: "Running without TLS encryption",
+                detail: "TLS setup failed: \(error.localizedDescription)",
+                suggestion: "Restart ClipSync. Clipboard data will be sent unencrypted on your network."
+            ))
         }
         menuBar.install()
         let server = ClipServer(
@@ -90,6 +98,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         watcher.start()
+        server?.onStartupError = { [weak self] error in
+            self?.errorStore.append(AppError(
+                severity: .error,
+                summary: "Server failed to start",
+                detail: error.localizedDescription,
+                suggestion: "Check the logs and restart ClipSync."
+            ))
+        }
         server?.start()
     }
 
