@@ -56,6 +56,7 @@ class ClipForegroundService : Service() {
     private var clipListenerRegistered = false
     private var clipListenerRegisteredAt = 0L   // grace period to suppress registration-fire
     private var lastAutoSendMs = 0L
+    private var connectedHost: String? = null
 
     // Shizuku clipboard (Tier 1)
     private var shizukuManager: ShizukuClipboardManager? = null
@@ -131,6 +132,11 @@ class ClipForegroundService : Service() {
         @Suppress("DEPRECATION")
         stopForeground(true)
         networkObserver = NetworkChangeObserver(this) {
+            if (prefs.mode == Prefs.MODE_AUTO && prefs.host != null) {
+                prefs.host = null
+                connectedHost = null
+                L.event(M, "network change: host cleared, waiting for re-discovery")
+            }
             backoffMs = INITIAL_BACKOFF_MS
             handler.removeCallbacks(reconnectRunnable)
             handler.post(reconnectRunnable)
@@ -153,6 +159,10 @@ class ClipForegroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == ACTION_REFRESH_NOTIF) {
+            connectedHost?.let { host -> startForeground(NOTIF_ID, buildConnectedNotification(host)) }
+            return START_NOT_STICKY
+        }
         if (!prefs.hasPairing()) {
             L.warn(M, "No pairing stored, stopping service")
             stopSelf()
@@ -202,8 +212,9 @@ class ClipForegroundService : Service() {
                 when (status) {
                     is ClipClient.WsStatus.Open -> {
                         backoffMs = INITIAL_BACKOFF_MS
+                        connectedHost = host
                         L.event("WS", "connected host=$host")
-                        startForeground(NOTIF_ID, buildNotification("Connected to $host"))
+                        startForeground(NOTIF_ID, buildConnectedNotification(host))
                         handler.post {
                             registerClipListener()
                             if (shizukuManager?.isAvailable() == true) startShizukuPolling()
@@ -211,6 +222,7 @@ class ClipForegroundService : Service() {
                         }
                     }
                     is ClipClient.WsStatus.Closed -> {
+                        connectedHost = null
                         L.event("WS", "closed host=$host code=${status.code}")
                         @Suppress("DEPRECATION")
                         stopForeground(true)
@@ -222,6 +234,7 @@ class ClipForegroundService : Service() {
                         scheduleReconnect()
                     }
                     is ClipClient.WsStatus.Error -> {
+                        connectedHost = null
                         L.warn("WS", "error host=$host msg=${status.message}")
                         @Suppress("DEPRECATION")
                         stopForeground(true)
@@ -238,6 +251,11 @@ class ClipForegroundService : Service() {
 
     private fun onFrame(payload: ClipPayload) {
         L.event(M, "frame type=${payload.type} mime=${payload.mime} bytes=${payload.data.length}")
+
+        if (payload.type == "text" && !prefs.autoSendEnabled) {
+            L.verbose(M, "skip inbound text: autoSendEnabled=false")
+            return
+        }
 
         // Tier 1: Write text directly via Shizuku (no ApplyClipActivity trampoline)
         if (payload.type == "text" && shizukuManager?.isAvailable() == true) {
@@ -362,6 +380,12 @@ class ClipForegroundService : Service() {
         }
     }
 
+    private fun buildConnectedNotification(host: String): Notification {
+        val text = if (prefs.autoSendEnabled) "Connected to $host"
+                   else "Connected · sync paused — enable in app"
+        return buildNotification(text)
+    }
+
     private fun buildNotification(text: String): Notification {
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("ClipSync")
@@ -484,6 +508,7 @@ class ClipForegroundService : Service() {
         private const val INITIAL_BACKOFF_MS = 1_000L
         private const val MAX_BACKOFF_MS = 30_000L
         private const val SHIZUKU_POLL_MS = 500L
+        const val ACTION_REFRESH_NOTIF = "com.clipsync.REFRESH_NOTIF"
 
         fun start(context: Context) {
             val i = Intent(context, ClipForegroundService::class.java)
@@ -496,6 +521,17 @@ class ClipForegroundService : Service() {
 
         fun stop(context: Context) {
             context.stopService(Intent(context, ClipForegroundService::class.java))
+        }
+
+        fun refreshNotification(context: Context) {
+            val i = Intent(context, ClipForegroundService::class.java).apply {
+                action = ACTION_REFRESH_NOTIF
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(i)
+            } else {
+                context.startService(i)
+            }
         }
     }
 }

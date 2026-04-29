@@ -139,6 +139,7 @@ class SettingsViewModel : ViewModel() {
         val prefs = Prefs(context)
         prefs.autoSendEnabled = enabled
         _state.value = _state.value.copy(autoSendEnabled = enabled)
+        ClipForegroundService.refreshNotification(context)
     }
 
     fun startSync(context: Context) {
@@ -474,12 +475,30 @@ class SettingsViewModel : ViewModel() {
     private fun startNetworkWatch(context: Context) {
         networkWatchJob?.cancel()
         networkWatchJob = viewModelScope.launch {
+            val appContext = context.applicationContext
             while (true) {
                 delay(3_000)
-                val onWifi = isOnWifi(context)
-                val onMobile = isOnMobileData(context)
-                val vpnActive = withContext(Dispatchers.IO) { isTailscaleVpnActive(context) }
+                val onWifi = isOnWifi(appContext)
+                val onMobile = isOnMobileData(appContext)
+                val vpnActive = withContext(Dispatchers.IO) { isTailscaleVpnActive(appContext) }
                 val prev = _state.value
+
+                // Service clears host on network change (auto mode) → prompt re-pair
+                val currentHost = Prefs(appContext).host
+                if (prev.hasPairing && currentHost == null) {
+                    L.event(M, "host cleared by service: prompting re-pair")
+                    _state.value = prev.copy(
+                        hasPairing = false,
+                        pairedHost = null,
+                        status = ConnectionStatus.Disconnected,
+                        isOnWifi = onWifi,
+                        isOnMobileData = onMobile,
+                        isTailscaleVpnActive = vpnActive,
+                    )
+                    startDiscovery(appContext)
+                    continue
+                }
+
                 if (onWifi != prev.isOnWifi || onMobile != prev.isOnMobileData || vpnActive != prev.isTailscaleVpnActive) {
                     L.event(M, "network changed: wifi=$onWifi mobile=$onMobile vpn=$vpnActive")
                     _state.value = prev.copy(
@@ -487,7 +506,7 @@ class SettingsViewModel : ViewModel() {
                         isOnMobileData = onMobile,
                         isTailscaleVpnActive = vpnActive,
                     )
-                    if (onWifi && !prev.isOnWifi) startDiscovery(context)
+                    if (onWifi && !prev.isOnWifi) startDiscovery(appContext)
                 }
             }
         }
