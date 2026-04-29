@@ -97,31 +97,43 @@
 
 ## How it works
 
+### Pairing — one time setup
+
 ```mermaid
-flowchart LR
-    subgraph Mac["🖥️ macOS menu bar app"]
-        PW[PasteboardWatcher]
-        CS[ClipServer :7010]
-        PI[PasteboardInjector]
-        WH[WebSocketHub]
-    end
+sequenceDiagram
+    autonumber
+    actor U as You
+    participant M as 🖥️ Mac
+    participant A as 📱 Android
 
-    subgraph Android["📱 Android app"]
-        CC[ClipClient]
-        CSend[ClipSender]
-    end
-
-    PW -- clipboard changed --> CS
-    CS -- WebSocket push --> CC
-    CSend -- POST /inject --> CS
-    CS --> PI
-
-    Mac <-->|"TLS · Bearer token · HMAC-SHA256"| Android
+    U->>M: Start Pairing…
+    M->>M: Generate 6-digit code (5 min TTL)
+    M-->>U: Show QR code
+    U->>A: Scan QR with camera
+    A->>M: GET /pair?code=123456
+    M-->>A: bearer token + HMAC secret + TLS fingerprint
+    Note over M,A: Secrets stored in Keychain / EncryptedSharedPreferences
 ```
 
-> Auto-discovery via mDNS `_clipsync._tcp` on LAN · manual IP for Tailscale
+### Clipboard sync — every copy
 
-**Pairing** uses a TOFU (trust on first use) model: the Mac displays a 6-digit code (or QR); the Android app calls `GET /pair?code=XXXX` and receives a bearer token + HMAC secret, both stored in encrypted storage.
+```mermaid
+sequenceDiagram
+    participant M as 🖥️ Mac
+    participant A as 📱 Android
+
+    note over M: Mac → Android
+    M->>M: PasteboardWatcher detects copy
+    M->>A: WebSocket push · payload signed with HMAC-SHA256
+    A->>A: Write to clipboard
+
+    note over A: Android → Mac
+    A->>A: Clipboard listener fires (Shizuku)
+    A->>M: POST /inject · Bearer token + HMAC-SHA256
+    M->>M: PasteboardInjector writes to clipboard
+```
+
+> **Transport:** TLS with SPKI pinning (TOFU) — LAN via mDNS · remote via Tailscale IP
 
 ---
 
