@@ -36,29 +36,6 @@ class NsdDiscovery(context: Context) {
     private val nsd = context.getSystemService(Context.NSD_SERVICE) as NsdManager
 
     fun discover(): Flow<DiscoveryEvent> = callbackFlow {
-        val resolveListener = object : NsdManager.ResolveListener {
-            override fun onServiceResolved(info: NsdServiceInfo) {
-                val addr = info.host ?: return
-                val port = info.port
-                val parsed = parseTxt(info.attributes)
-                val host = resolveHost(addr)
-                val d = Discovered(
-                    host = host,
-                    port = port,
-                    fp = parsed["fp"],
-                    name = info.serviceName ?: "",
-                    version = parsed["version"]
-                )
-                L.event(M, "Resolved $d")
-                trySend(DiscoveryEvent.Found(d))
-            }
-
-            override fun onResolveFailed(info: NsdServiceInfo, errorCode: Int) {
-                L.warn(M, "Resolve failed for ${info.serviceName}: $errorCode")
-                trySend(DiscoveryEvent.Error("Failed to resolve service '${info.serviceName}' (error $errorCode)"))
-            }
-        }
-
         val discoveryListener = object : NsdManager.DiscoveryListener {
             override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
                 L.error(M, "Start discovery failed: $errorCode")
@@ -81,8 +58,30 @@ class NsdDiscovery(context: Context) {
 
             override fun onServiceFound(info: NsdServiceInfo) {
                 L.event(M, "Found ${info.serviceName} / ${info.serviceType}")
+                val perServiceListener = object : NsdManager.ResolveListener {
+                    override fun onServiceResolved(resolved: NsdServiceInfo) {
+                        val addr = resolved.host ?: return
+                        val port = resolved.port
+                        val parsed = parseTxt(resolved.attributes)
+                        val host = resolveHost(addr)
+                        val d = Discovered(
+                            host = host,
+                            port = port,
+                            fp = parsed["fp"],
+                            name = resolved.serviceName ?: "",
+                            version = parsed["version"]
+                        )
+                        L.event(M, "Resolved $d")
+                        trySend(DiscoveryEvent.Found(d))
+                    }
+
+                    override fun onResolveFailed(resolved: NsdServiceInfo, errorCode: Int) {
+                        L.warn(M, "Resolve failed for ${resolved.serviceName}: $errorCode")
+                        trySend(DiscoveryEvent.Error("Failed to resolve '${resolved.serviceName}' (error $errorCode)"))
+                    }
+                }
                 @Suppress("DEPRECATION")
-                nsd.resolveService(info, resolveListener)
+                nsd.resolveService(info, perServiceListener)
             }
 
             override fun onServiceLost(info: NsdServiceInfo) {
