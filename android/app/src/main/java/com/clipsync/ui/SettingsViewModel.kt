@@ -130,6 +130,12 @@ class SettingsViewModel : ViewModel() {
                         is ClipForegroundService.ServiceState.Paused -> ConnectionStatus.Paused(svcState.host)
                     }
                     _state.value = _state.value.copy(status = newStatus)
+
+                    // Restart discovery when disconnected so Mac reappears in list
+                    if (svcState is ClipForegroundService.ServiceState.Disconnected && _state.value.hasPairing) {
+                        delay(2000)
+                        startDiscovery(context.applicationContext)
+                    }
                 }
             }
         } catch (t: Throwable) {
@@ -275,6 +281,11 @@ class SettingsViewModel : ViewModel() {
                     detail = t.message,
                     suggestion = "Discovery will restart on next network change.",
                 ))
+            }
+            // Auto-restart discovery after unexpected completion (with backoff)
+            if (_state.value.status is ConnectionStatus.Disconnected) {
+                delay(5000)
+                startDiscovery(context)
             }
         }
     }
@@ -606,7 +617,7 @@ class SettingsViewModel : ViewModel() {
                         isOnMobileData = onMobile,
                         isTailscaleVpnActive = vpnActive,
                     )
-                    if (onWifi && !prev.isOnWifi) startDiscovery(appContext)
+                    startDiscovery(appContext)
                 }
             }
         }
