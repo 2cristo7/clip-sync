@@ -41,6 +41,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let pairingWindow = PairingWindowController()
     private let tailscaleWindow = TailscaleWindowController()
     private var broadcastTask: Task<Void, Never>?
+    private var serverTask: Task<Void, Never>?
     private var logger = Logger(label: "clipsync.app")
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -83,6 +84,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         broadcastTask?.cancel()
+        serverTask?.cancel()
         watcher.stop()
         server?.stop()
         reachabilityMonitor?.stop()
@@ -99,7 +101,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         watcher.start()
-        server?.start()
+
+        serverTask = Task.detached { [weak self] in
+            guard let server = await self?.server else { return }
+            var retries = 0
+            let maxRetries = 3
+
+            while retries < maxRetries {
+                do {
+                    try await server.run()
+                    // run() returned normally — clean shutdown, stop retrying.
+                    break
+                } catch {
+                    // Ignore cancellation — this is an intentional shutdown.
+                    if Task.isCancelled { break }
+                    retries += 1
+                    let logger = await self?.logger
+                    logger?.error("Server crashed (attempt \(retries)/\(maxRetries)): \(error)")
+
+                    if retries < maxRetries {
+                        logger?.info("Restarting server in 5s...")
+                        try? await Task.sleep(for: .seconds(5))
+                        if Task.isCancelled { break }
+                    } else {
+                        logger?.error("Server failed after \(maxRetries) attempts, giving up")
+                        let errorStore = self?.errorStore
+                        let detail = error.localizedDescription
+                        await MainActor.run {
+                            errorStore?.appendAndNotify(AppError(
+                                severity: .error,
+                                summary: "Server stopped unexpectedly",
+                                detail: detail,
+                                suggestion: "Restart ClipSync manually."
+                            ))
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private func startAdvertising() {
