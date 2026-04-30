@@ -400,37 +400,3 @@ fun NeuManageRow(
         if (divider) HorizontalDivider(color = NeuColors.Border.copy(alpha = 0.5f), thickness = 0.5.dp)
     }
 }
-
-// Backward-compatible aliases
-@Composable
-fun ClayCard(
-    modifier: Modifier = Modifier,
-    cornerRadius: Dp = 20.dp,
-    content: @Composable () -> Unit
-) = NeuCard(modifier, cornerRadius, content)
-
-@Composable
-fun ClayButton(
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-    isAccent: Boolean = false,
-    isDestructive: Boolean = false,
-    content: @Composable () -> Unit
-) = NeuButton(onClick, modifier, enabled, isAccent, isDestructive, content)
-
-@Composable
-fun ClaySegmentedToggle(
-    options: List<String>,
-    selectedIndex: Int,
-    onSelected: (Int) -> Unit,
-    modifier: Modifier = Modifier
-) = NeuSegmentedToggle(options, selectedIndex, onSelected, modifier)
-
-@Composable
-fun ClayStatusBadge(label: String, color: Color, modifier: Modifier = Modifier) =
-    NeuStatusBadge(label, color, modifier)
-
-@Composable
-fun ClaySectionHeader(title: String, modifier: Modifier = Modifier) =
-    NeuSectionHeader(title, modifier)
