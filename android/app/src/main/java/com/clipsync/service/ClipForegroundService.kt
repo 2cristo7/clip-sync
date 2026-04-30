@@ -332,6 +332,14 @@ class ClipForegroundService : Service() {
             return
         }
 
+        if (payload.type == "image" || payload.type == "file") {
+            val estimatedBytes = payload.data.length * 3 / 4
+            if (estimatedBytes > ClipPayloadBuilder.MAX_IMAGE_BYTES) {
+                L.warn(M, "payload too large: ~${estimatedBytes / 1024}KB, dropping")
+                return
+            }
+        }
+
         if (payload.type == "image") {
             try {
                 val bytes = Base64.decode(payload.data, Base64.DEFAULT)

@@ -16,6 +16,15 @@ data class ClipPayload(
     val nonce: String,
     val name: String? = null
 ) {
+    fun validate() {
+        require(type in listOf("text", "image", "file")) { "Invalid type: $type" }
+        require(mime.isNotEmpty() && mime.length <= 256) { "Invalid MIME: $mime" }
+        require(nonce.isNotEmpty()) { "Empty nonce" }
+        name?.let { require(it.length <= 1024) { "Name too long: ${it.length}" } }
+        val nowSec = System.currentTimeMillis() / 1000L
+        require(kotlin.math.abs(nowSec - ts) < 5 * 60) { "Timestamp out of range" }
+    }
+
     fun toJson(): String {
         val o = JSONObject()
         o.put("type", type)
@@ -37,7 +46,7 @@ data class ClipPayload(
                 ts = o.getLong("ts"),
                 nonce = o.getString("nonce"),
                 name = if (o.has("name")) o.getString("name") else null
-            )
+            ).also { it.validate() }
         }
     }
 }
