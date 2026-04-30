@@ -170,6 +170,9 @@ class ClipForegroundService : Service() {
         @Suppress("DEPRECATION")
         stopForeground(true)
         networkObserver = NetworkChangeObserver(this) {
+            wsGeneration++  // Invalidate any pending callbacks from the old WS
+            ws?.cancel()
+            ws = null
             if (prefs.mode == Prefs.MODE_AUTO && prefs.host != null) {
                 prefs.host = null
                 connectedHost = null
@@ -317,7 +320,7 @@ class ClipForegroundService : Service() {
             val text = IncomingClipNotifier.decodeUtf8(payload.data)
             ClipboardWriter.lastMacWriteMs = System.currentTimeMillis()
             shizukuManager?.setClipboardText(text)
-            lastShizukuHash = text.hashCode()
+            lastShizukuHash = shizukuManager?.getClipboardHash() ?: text.hashCode()
             L.event(M, "clipboard write via shizuku chars=${text.length}")
             if (isEcho(payload)) {
                 L.verbose(M, "skip notification: echo from mac")
