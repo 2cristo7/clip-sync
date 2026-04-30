@@ -73,6 +73,7 @@ struct AuthMiddleware<Context: RequestContext>: RouterMiddleware {
         let prefix = "Bearer "
         guard header.lowercased().hasPrefix(prefix.lowercased()) else { return nil }
         let token = String(header.dropFirst(prefix.count)).trimmingCharacters(in: .whitespaces)
+        guard token.count <= 512 else { return nil }
         return token.isEmpty ? nil : token
     }
 }

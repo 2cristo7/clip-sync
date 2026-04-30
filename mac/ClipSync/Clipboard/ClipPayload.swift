@@ -79,4 +79,31 @@ struct ClipPayload: Codable, Sendable, Equatable {
     var rawData: Data? {
         Data(base64Encoded: dataBase64)
     }
+
+    func validate() throws {
+        guard ["text", "image", "file"].contains(type.rawValue) else {
+            throw ValidationError.invalidType(type.rawValue)
+        }
+        guard !mime.isEmpty, mime.count <= 256 else {
+            throw ValidationError.invalidMime
+        }
+        guard !nonce.isEmpty else {
+            throw ValidationError.missingNonce
+        }
+        if let name = name, name.count > 1024 {
+            throw ValidationError.nameTooLong
+        }
+        let now = Int64(Date().timeIntervalSince1970 * 1000)
+        guard abs(now - ts) < 5 * 60 * 1000 else {
+            throw ValidationError.timestampOutOfRange
+        }
+    }
+
+    enum ValidationError: Error {
+        case invalidType(String)
+        case invalidMime
+        case missingNonce
+        case nameTooLong
+        case timestampOutOfRange
+    }
 }

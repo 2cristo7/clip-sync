@@ -20,6 +20,7 @@ final class ClipServer {
     private let tlsConfiguration: TLSConfiguration?
     private var runTask: Task<Void, Never>?
     private let errorStore: ErrorStore
+    let rateLimiter = RateLimiter()
 
     init(config: ServerConfig = .default,
          hub: WebSocketHub,
@@ -50,6 +51,7 @@ final class ClipServer {
             pairing: pairing,
             tokenStore: tokenStore,
             hmacValidator: hmacValidator,
+            rateLimiter: rateLimiter,
             logger: logger
         )
 
@@ -148,6 +150,7 @@ final class ClipServer {
                            pairing: PairingManager,
                            tokenStore: TokenStore,
                            hmacValidator: HMACValidator,
+                           rateLimiter: RateLimiter,
                            logger: Logger) -> Router<BasicRequestContext> {
         let router = Router()
         router.add(middleware: AuthMiddleware<BasicRequestContext>(
@@ -158,6 +161,10 @@ final class ClipServer {
             HealthResponse(ok: true, version: version, platform: platform)
         }
         router.post("/inject") { request, context -> InjectResponse in
+            let clientIP = request.headers[HTTPField.Name("X-Forwarded-For")!] ?? "unknown"
+            guard await rateLimiter.allow(key: "inject:\(clientIP)", maxRequests: 10, windowSeconds: 1) else {
+                throw HTTPError(.tooManyRequests)
+            }
             let sourceTag = request.headers[HTTPField.Name("X-ClipSync-Source")!]
             // Decode manually instead of request.decode() — the default
             // BasicRequestContext.maxUploadSize is 2 MB which is too small
@@ -165,7 +172,12 @@ final class ClipServer {
             // own (higher) limit, so we just re-collect the buffered bytes.
             var req = request
             let buffer = try await req.collectBody(upTo: 25 * 1024 * 1024)
+            let estimatedSize = buffer.readableBytes * 3 / 4
+            guard estimatedSize <= 20 * 1024 * 1024 else {
+                throw HTTPError(.contentTooLarge)
+            }
             let payload = try JSONDecoder().decode(ClipPayload.self, from: buffer)
+            try payload.validate()
             context.logger.info("inject received", metadata: [
                 "source": .string(sourceTag ?? "unknown"),
                 "type": .string(payload.type.rawValue),
@@ -184,6 +196,10 @@ final class ClipServer {
             return InjectResponse(ok: true, nonce: payload.nonce)
         }
         router.get("/pair") { request, context -> PairingResponse in
+            let clientIP = request.headers[HTTPField.Name("X-Forwarded-For")!] ?? "unknown"
+            guard await rateLimiter.allow(key: "pair:\(clientIP)", maxRequests: 5, windowSeconds: 60) else {
+                throw HTTPError(.tooManyRequests)
+            }
             guard let raw = request.uri.queryParameters["code"] else {
                 throw HTTPError(.badRequest, message: "missing code")
             }

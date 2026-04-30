@@ -33,7 +33,7 @@ struct HMACValidator: Sendable {
 
     init(secret: Data,
          clock: HMACClock = SystemHMACClock(),
-         skewSeconds: TimeInterval = 60) {
+         skewSeconds: TimeInterval = 30) {
         self.secret = secret
         self.clock = clock
         self.skewSeconds = skewSeconds
