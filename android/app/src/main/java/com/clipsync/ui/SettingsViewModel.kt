@@ -121,31 +121,15 @@ class SettingsViewModel : ViewModel() {
             refreshTailscaleState(context)
             startNetworkWatch(context)
 
-            if (paired) {
-                val host = prefs.host ?: return
-                val port = prefs.port
-                val fp = prefs.fp ?: return
-                viewModelScope.launch {
-                    val result = withContext(Dispatchers.IO) {
-                        PairingApi().ping(host, port, fp)
+            viewModelScope.launch {
+                ClipForegroundService.serviceState.collect { svcState ->
+                    val newStatus = when (svcState) {
+                        is ClipForegroundService.ServiceState.Disconnected -> ConnectionStatus.Disconnected
+                        is ClipForegroundService.ServiceState.Connecting -> ConnectionStatus.Connecting
+                        is ClipForegroundService.ServiceState.Connected -> ConnectionStatus.Connected(svcState.host)
+                        is ClipForegroundService.ServiceState.Paused -> ConnectionStatus.Paused(svcState.host)
                     }
-                    result.fold(
-                        onSuccess = { alive ->
-                            _state.value = _state.value.copy(
-                                status = if (alive) ConnectionStatus.Connected(host)
-                                         else ConnectionStatus.Disconnected
-                            )
-                        },
-                        onFailure = { error ->
-                            _state.value = _state.value.copy(status = ConnectionStatus.Disconnected)
-                            addError(AppError(
-                                severity = ErrorSeverity.WARNING,
-                                summary = "Server not responding",
-                                detail = error.message,
-                                suggestion = "Check that the Mac is running ClipSync.",
-                            ))
-                        }
-                    )
+                    _state.value = _state.value.copy(status = newStatus)
                 }
             }
         } catch (t: Throwable) {
@@ -410,26 +394,6 @@ class SettingsViewModel : ViewModel() {
             errors = emptyList()
         )
         ClipForegroundService.start(context)
-        val pingResult = withContext(Dispatchers.IO) { PairingApi().ping(host, port, fp) }
-        pingResult.fold(
-            onSuccess = { alive ->
-                _state.value = _state.value.copy(
-                    status = if (alive) ConnectionStatus.Connected(host)
-                             else ConnectionStatus.Error("Paired but could not verify connection to $host")
-                )
-            },
-            onFailure = { error ->
-                _state.value = _state.value.copy(
-                    status = ConnectionStatus.Error("Paired but could not verify connection to $host")
-                )
-                addError(AppError(
-                    severity = ErrorSeverity.WARNING,
-                    summary = "Server not responding",
-                    detail = error.message,
-                    suggestion = "Check that the Mac is running ClipSync.",
-                ))
-            }
-        )
     }
 
     fun refreshShizukuState(context: Context) {
