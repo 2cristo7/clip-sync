@@ -128,13 +128,9 @@ class ClipClient {
     }
 
     private fun baseBuilder(): OkHttpClient.Builder = OkHttpClient.Builder()
-        .pingInterval(30, java.util.concurrent.TimeUnit.SECONDS)
-        .connectTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
-        .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
-        .writeTimeout(10, java.util.concurrent.TimeUnit.SECONDS)
+        .pingInterval(30, TimeUnit.SECONDS)
         .connectTimeout(10, TimeUnit.SECONDS)
-        .readTimeout(0, TimeUnit.SECONDS) // WebSocket: no read timeout
+        .readTimeout(60, TimeUnit.SECONDS)
         .writeTimeout(10, TimeUnit.SECONDS)
-        .pingInterval(20, TimeUnit.SECONDS)
         .retryOnConnectionFailure(true)
 }

@@ -105,6 +105,7 @@ final class ClipServer {
                 logger.info("ClipSync server starting on \(config.host):\(config.port)", metadata: [
                     "tls": .stringConvertible(tlsConfiguration != nil),
                 ])
+                await hub.startPingLoop()
                 try await app.runService()
             } catch {
                 Self.logStartupError(error, config: config, logger: logger)
@@ -136,6 +137,7 @@ final class ClipServer {
     func stop() {
         runTask?.cancel()
         runTask = nil
+        Task { await hub.stop() }
     }
 
     private static let version = "0.1.0"
