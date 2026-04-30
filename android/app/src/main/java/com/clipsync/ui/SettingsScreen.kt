@@ -59,6 +59,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -71,6 +72,8 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -93,6 +96,7 @@ import com.clipsync.ui.theme.NeuStatusRow
 import com.clipsync.ui.theme.NeuToggleRow
 import com.clipsync.model.ErrorAction
 import com.clipsync.ui.components.ErrorBanner
+import kotlinx.coroutines.delay
 
 @Composable
 fun SettingsScreen(
@@ -732,9 +736,18 @@ fun SettingsScreen(
                     onDismiss = { vm.dismissError(error.id) },
                     onAction = { action ->
                         when (action) {
-                            is ErrorAction.Retry -> vm.startSync(context)
-                            is ErrorAction.Repair -> { /* TODO: navigate to re-pair */ }
-                            is ErrorAction.OpenUrl -> { /* TODO: open URL */ }
+                            is ErrorAction.Retry -> {
+                                vm.dismissError(error.id)
+                                vm.bootstrap(context)
+                            }
+                            is ErrorAction.Repair -> {
+                                vm.dismissError(error.id)
+                                vm.unpair(context)
+                            }
+                            is ErrorAction.OpenUrl -> {
+                                val intent = Intent(Intent.ACTION_VIEW, Uri.parse(action.url))
+                                context.startActivity(intent)
+                            }
                         }
                     }
                 )
@@ -802,11 +815,19 @@ private fun StatusDot(status: ConnectionStatus) {
         is ConnectionStatus.Paused -> NeuColors.TextSecondary.copy(alpha = 0.5f)
         is ConnectionStatus.Error -> NeuColors.Error
     }
+    val description = when (status) {
+        ConnectionStatus.Disconnected -> "Status: Disconnected"
+        ConnectionStatus.Connecting -> "Status: Connecting"
+        is ConnectionStatus.Connected -> "Status: Connected to ${status.host}"
+        is ConnectionStatus.Paused -> "Status: Paused"
+        is ConnectionStatus.Error -> "Status: Error — ${status.reason}"
+    }
     Box(
         modifier = Modifier
             .size(12.dp)
             .clip(RoundedCornerShape(6.dp))
             .background(color)
+            .semantics { contentDescription = description }
     )
 }
 
@@ -873,8 +894,16 @@ private fun PairingCodeDialog(
     onConfirm: (String) -> Unit
 ) {
     var code by remember { mutableStateOf("") }
+    var remainingSeconds by remember { mutableIntStateOf(120) }
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    LaunchedEffect(Unit) {
+        while (remainingSeconds > 0) {
+            delay(1000)
+            remainingSeconds--
+        }
+        onDismiss()
+    }
     val hostLabel = when (target) {
         is PairingTarget.Auto -> "${target.discovered.host}:${target.discovered.port}"
         is PairingTarget.Manual -> "${target.host}:${target.port}"
@@ -894,7 +923,13 @@ private fun PairingCodeDialog(
                     hostLabel,
                     style = MaterialTheme.typography.bodyMedium,
                 )
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Code expires in ${remainingSeconds}s",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (remainingSeconds <= 30) NeuColors.Error else NeuColors.TextSecondary,
+                )
+                Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
                     value = code,
                     onValueChange = { code = it.filter { c -> c.isDigit() }.take(6) },
