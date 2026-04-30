@@ -9,7 +9,9 @@ final class MenuBarController: NSObject {
     let errorStore: ErrorStore
     private let onStartPairing: () -> Void
     private let onTailscale: () -> Void
+    private let onToggleSync: () -> Void
     private let onQuit: () -> Void
+    private(set) var isSyncPaused = false
     private var refreshTask: Task<Void, Never>?
     private var currentClients: [ClipClientInfo] = []
     private var cancellables = Set<AnyCancellable>()
@@ -18,11 +20,13 @@ final class MenuBarController: NSObject {
          errorStore: ErrorStore,
          onStartPairing: @escaping () -> Void,
          onTailscale: @escaping () -> Void,
+         onToggleSync: @escaping () -> Void,
          onQuit: @escaping () -> Void) {
         self.hub = hub
         self.errorStore = errorStore
         self.onStartPairing = onStartPairing
         self.onTailscale = onTailscale
+        self.onToggleSync = onToggleSync
         self.onQuit = onQuit
         super.init()
         errorStore.$errors
@@ -40,7 +44,16 @@ final class MenuBarController: NSObject {
 
     private func updateStatusIcon() {
         guard let button = statusItem?.button else { return }
-        if errorStore.hasErrors {
+        if isSyncPaused {
+            let image = NSImage(
+                systemSymbolName: "pause.circle.fill",
+                accessibilityDescription: "ClipSync — Paused"
+            )
+            image?.isTemplate = false
+            button.image = image
+            button.contentTintColor = .systemGray
+            button.toolTip = "ClipSync — Sync Paused"
+        } else if errorStore.hasErrors {
             let image = NSImage(
                 systemSymbolName: "exclamationmark.circle.fill",
                 accessibilityDescription: "ClipSync — Error"
@@ -48,6 +61,7 @@ final class MenuBarController: NSObject {
             image?.isTemplate = false
             button.image = image
             button.contentTintColor = .systemRed
+            button.toolTip = "ClipSync — Error"
         } else if errorStore.hasWarnings {
             let image = NSImage(
                 systemSymbolName: "exclamationmark.circle.fill",
@@ -56,6 +70,7 @@ final class MenuBarController: NSObject {
             image?.isTemplate = false
             button.image = image
             button.contentTintColor = .systemOrange
+            button.toolTip = "ClipSync — Warning"
         } else {
             let image = NSImage(
                 systemSymbolName: "doc.on.clipboard",
@@ -64,6 +79,7 @@ final class MenuBarController: NSObject {
             image?.isTemplate = true
             button.image = image
             button.contentTintColor = nil
+            button.toolTip = "ClipSync"
         }
     }
 
@@ -153,6 +169,14 @@ final class MenuBarController: NSObject {
         }
 
         menu.addItem(.separator())
+        let syncItem = NSMenuItem(
+            title: isSyncPaused ? "Resume Sync" : "Pause Sync",
+            action: #selector(handleToggleSync),
+            keyEquivalent: ""
+        )
+        syncItem.target = self
+        menu.addItem(syncItem)
+
         let quitItem = NSMenuItem(
             title: "Quit ClipSync",
             action: #selector(handleQuit),
@@ -163,12 +187,23 @@ final class MenuBarController: NSObject {
         statusItem?.menu = menu
     }
 
+    /// Called by AppDelegate after it has actually started/stopped the watcher,
+    /// so the menu icon and title reflect the real state.
+    func setSyncPaused(_ paused: Bool) {
+        isSyncPaused = paused
+        rebuildMenu()
+    }
+
     @objc private func handleStartPairing() {
         onStartPairing()
     }
 
     @objc private func handleTailscale() {
         onTailscale()
+    }
+
+    @objc private func handleToggleSync() {
+        onToggleSync()
     }
 
     @objc private func handleQuit() {
