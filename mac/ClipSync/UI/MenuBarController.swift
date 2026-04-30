@@ -168,14 +168,16 @@ final class MenuBarController: NSObject {
             menu.addItem(clientsItem)
         }
 
-        menu.addItem(.separator())
-        let syncItem = NSMenuItem(
-            title: isSyncPaused ? "Resume Sync" : "Pause Sync",
-            action: #selector(handleToggleSync),
-            keyEquivalent: ""
-        )
-        syncItem.target = self
-        menu.addItem(syncItem)
+        if !currentClients.isEmpty || isSyncPaused {
+            menu.addItem(.separator())
+            let syncItem = NSMenuItem(
+                title: isSyncPaused ? "Resume Sync" : "Pause Sync",
+                action: #selector(handleToggleSync),
+                keyEquivalent: ""
+            )
+            syncItem.target = self
+            menu.addItem(syncItem)
+        }
 
         let quitItem = NSMenuItem(
             title: "Quit ClipSync",

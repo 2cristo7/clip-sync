@@ -360,6 +360,22 @@ class SettingsViewModel : ViewModel() {
                             suggestion = "Check that both devices are on the same network.",
                             action = ErrorAction.Retry,
                         )
+                    t is com.clipsync.net.PairingApi.PairingException && t.message?.contains("401") == true ->
+                        AppError(
+                            severity = ErrorSeverity.ERROR,
+                            summary = "Wrong pairing code",
+                            detail = "The code was incorrect or expired.",
+                            suggestion = "Generate a new code on the Mac and try again.",
+                            action = ErrorAction.Retry,
+                        )
+                    t is com.clipsync.net.PairingApi.PairingException ->
+                        AppError(
+                            severity = ErrorSeverity.ERROR,
+                            summary = "Pairing failed",
+                            detail = t.message ?: "Unknown error",
+                            suggestion = "Try again.",
+                            action = ErrorAction.Retry,
+                        )
                     else ->
                         AppError(
                             severity = ErrorSeverity.ERROR,
