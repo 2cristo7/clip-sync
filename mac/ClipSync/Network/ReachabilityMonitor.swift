@@ -22,6 +22,11 @@ final class ReachabilityMonitor {
     private var lastInterfaceNames: Set<String> = []
     private var isRunning = false
 
+    /// Called on the reachability queue whenever the set of active network
+    /// interfaces changes. Use this to react in AppDelegate (e.g. verify
+    /// server health after a network change).
+    var onNetworkChange: (() -> Void)?
+
     init(
         advertiser: BonjourAdvertiser,
         pathMonitor: NWPathMonitor = NWPathMonitor(),
@@ -82,7 +87,13 @@ final class ReachabilityMonitor {
             if status == .satisfied {
                 logger.info("Interfaces changed, re-announcing Bonjour service")
                 advertiser.stop()
-                advertiser.start()
+                // Delay start to avoid a race where stop() hasn't fully unwound
+                // before start() schedules the new NetService (race R3).
+                Task {
+                    try? await Task.sleep(for: .milliseconds(500))
+                    advertiser.start()
+                }
+                onNetworkChange?()
             }
         }
     }

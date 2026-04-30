@@ -116,10 +116,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             serviceName: name,
             txtRecord: txt
         )
+        advertiser.onPublishFailed = { [weak self] error in
+            Task { @MainActor in
+                self?.errorStore.append(AppError(
+                    severity: .warning,
+                    summary: "mDNS advertising failed",
+                    detail: error.localizedDescription,
+                    suggestion: "Devices on your network may not find this Mac automatically."
+                ))
+            }
+        }
         advertiser.start()
         self.advertiser = advertiser
 
         let reachability = ReachabilityMonitor(advertiser: advertiser)
+        reachability.onNetworkChange = { [weak self] in
+            Task { @MainActor in
+                self?.logger.info("Network changed — verifying server health")
+            }
+        }
         reachability.start()
         self.reachabilityMonitor = reachability
     }
