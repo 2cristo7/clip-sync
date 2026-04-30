@@ -360,12 +360,36 @@ class SettingsViewModel : ViewModel() {
                             suggestion = "Check that both devices are on the same network.",
                             action = ErrorAction.Retry,
                         )
-                    t is com.clipsync.net.PairingApi.PairingException && t.message?.contains("401") == true ->
+                    t is com.clipsync.net.PairingApi.PairingException && t.message?.contains("\"invalid\"") == true ->
                         AppError(
                             severity = ErrorSeverity.ERROR,
                             summary = "Wrong pairing code",
-                            detail = "The code was incorrect or expired.",
-                            suggestion = "Generate a new code on the Mac and try again.",
+                            detail = "The code was incorrect.",
+                            suggestion = "Check the code shown on Mac and try again.",
+                            action = ErrorAction.Retry,
+                        )
+                    t is com.clipsync.net.PairingApi.PairingException && t.message?.contains("\"expired\"") == true ->
+                        AppError(
+                            severity = ErrorSeverity.ERROR,
+                            summary = "Pairing code expired",
+                            detail = "The code was only valid for 5 minutes.",
+                            suggestion = "Generate a new code on the Mac.",
+                            action = ErrorAction.Retry,
+                        )
+                    t is com.clipsync.net.PairingApi.PairingException && t.message?.contains("\"consumed\"") == true ->
+                        AppError(
+                            severity = ErrorSeverity.ERROR,
+                            summary = "Code already used",
+                            detail = "Each pairing code can only be used once.",
+                            suggestion = "Generate a new code on the Mac.",
+                            action = ErrorAction.Retry,
+                        )
+                    t is com.clipsync.net.PairingApi.PairingException && t.message?.contains("\"notStarted\"") == true ->
+                        AppError(
+                            severity = ErrorSeverity.ERROR,
+                            summary = "No pairing session on Mac",
+                            detail = "The Mac app is not waiting for a pairing request.",
+                            suggestion = "Click 'Pair new device' on the Mac first.",
                             action = ErrorAction.Retry,
                         )
                     t is com.clipsync.net.PairingApi.PairingException ->
