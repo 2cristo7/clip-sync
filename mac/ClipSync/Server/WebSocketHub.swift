@@ -109,7 +109,7 @@ actor WebSocketHub {
         guard pingTask == nil else { return }
         pingTask = Task {
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 30_000_000_000)
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
                 guard !Task.isCancelled else { break }
                 await self.pingAllClients()
             }

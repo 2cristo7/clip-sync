@@ -84,8 +84,8 @@ class ClipForegroundService : Service() {
                             consecutiveFailures = 0
                         } else {
                             consecutiveFailures++
-                            L.warn(M, "health check failed ($consecutiveFailures/3): ${result.exceptionOrNull()?.message}")
-                            if (consecutiveFailures >= 3) {
+                            L.warn(M, "health check failed ($consecutiveFailures/2): ${result.exceptionOrNull()?.message}")
+                            if (consecutiveFailures >= 2) {
                                 L.warn(M, "health check: 3 consecutive failures, treating as disconnected")
                                 _serviceState.value = ServiceState.Disconnected
                                 ws?.cancel()
@@ -103,8 +103,8 @@ class ClipForegroundService : Service() {
                     handler.post {
                         if (connectedHost == null) return@post
                         consecutiveFailures++
-                        L.warn(M, "health check exception ($consecutiveFailures/3): ${t.message}")
-                        if (consecutiveFailures >= 3) {
+                        L.warn(M, "health check exception ($consecutiveFailures/2): ${t.message}")
+                        if (consecutiveFailures >= 2) {
                             L.warn(M, "health check: 3 consecutive failures, treating as disconnected")
                             _serviceState.value = ServiceState.Disconnected
                             ws?.cancel()
@@ -618,7 +618,7 @@ class ClipForegroundService : Service() {
         private const val INITIAL_BACKOFF_MS = 1_000L
         private const val MAX_BACKOFF_MS = 30_000L
         private const val SHIZUKU_POLL_MS = 1000L
-        private const val HEALTH_CHECK_MS = 15_000L
+        private const val HEALTH_CHECK_MS = 10_000L
         const val ACTION_REFRESH_NOTIF = "com.clipsync.REFRESH_NOTIF"
 
         private val _serviceState = MutableStateFlow<ServiceState>(ServiceState.Disconnected)
