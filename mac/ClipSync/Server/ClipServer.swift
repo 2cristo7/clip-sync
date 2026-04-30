@@ -153,6 +153,7 @@ final class ClipServer {
                            rateLimiter: RateLimiter,
                            logger: Logger) -> Router<BasicRequestContext> {
         let router = Router()
+        router.add(middleware: RateLimitMiddleware<BasicRequestContext>(rateLimiter: rateLimiter))
         router.add(middleware: AuthMiddleware<BasicRequestContext>(
             tokenStore: tokenStore,
             hmacValidator: hmacValidator
@@ -161,10 +162,6 @@ final class ClipServer {
             HealthResponse(ok: true, version: version, platform: platform)
         }
         router.post("/inject") { request, context -> InjectResponse in
-            let clientIP = request.headers[HTTPField.Name("X-Forwarded-For")!] ?? "unknown"
-            guard await rateLimiter.allow(key: "inject:\(clientIP)", maxRequests: 10, windowSeconds: 1) else {
-                throw HTTPError(.tooManyRequests)
-            }
             let sourceTag = request.headers[HTTPField.Name("X-ClipSync-Source")!]
             // Decode manually instead of request.decode() — the default
             // BasicRequestContext.maxUploadSize is 2 MB which is too small

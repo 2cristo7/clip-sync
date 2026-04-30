@@ -32,6 +32,7 @@
 		A00000000000000000001A02 /* TokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000001A01 /* TokenStore.swift */; };
 		A00000000000000000001B02 /* AuthMiddleware.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000001B01 /* AuthMiddleware.swift */; };
 		A00000000000000000002604 /* RateLimiter.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000002603 /* RateLimiter.swift */; };
+		A00000000000000000002606 /* RateLimitMiddleware.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000002605 /* RateLimitMiddleware.swift */; };
 		A00000000000000000001C02 /* TLSManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000001C01 /* TLSManagerTests.swift */; };
 		A00000000000000000001D02 /* HMACValidatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000001D01 /* HMACValidatorTests.swift */; };
 		A00000000000000000001E02 /* TokenStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000001E01 /* TokenStoreTests.swift */; };
@@ -83,6 +84,7 @@
 		A00000000000000000001A01 /* TokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenStore.swift; sourceTree = "<group>"; };
 		A00000000000000000001B01 /* AuthMiddleware.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthMiddleware.swift; sourceTree = "<group>"; };
 		A00000000000000000002603 /* RateLimiter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RateLimiter.swift; sourceTree = "<group>"; };
+		A00000000000000000002605 /* RateLimitMiddleware.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RateLimitMiddleware.swift; sourceTree = "<group>"; };
 		A00000000000000000001C01 /* TLSManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TLSManagerTests.swift; sourceTree = "<group>"; };
 		A00000000000000000001D01 /* HMACValidatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HMACValidatorTests.swift; sourceTree = "<group>"; };
 		A00000000000000000001E01 /* TokenStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TokenStoreTests.swift; sourceTree = "<group>"; };
@@ -149,6 +151,7 @@
 				A00000000000000000001B01 /* AuthMiddleware.swift */,
 				A00000000000000000000401 /* ClipServer.swift */,
 				A00000000000000000002603 /* RateLimiter.swift */,
+				A00000000000000000002605 /* RateLimitMiddleware.swift */,
 				A00000000000000000000403 /* ServerConfig.swift */,
 				A00000000000000000000405 /* WebSocketHub.swift */,
 			);
@@ -355,6 +358,7 @@
 				A00000000000000000001002 /* BonjourAdvertiser.swift in Sources */,
 				A00000000000000000000402 /* ClipServer.swift in Sources */,
 				A00000000000000000002604 /* RateLimiter.swift in Sources */,
+				A00000000000000000002606 /* RateLimitMiddleware.swift in Sources */,
 				A00000000000000000000502 /* ClipPayload.swift in Sources */,
 				A00000000000000000001902 /* HMACValidator.swift in Sources */,
 				A00000000000000000001202 /* Keychain.swift in Sources */,
