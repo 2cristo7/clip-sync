@@ -66,7 +66,7 @@ data class SettingsState(
     val status: ConnectionStatus = ConnectionStatus.Disconnected,
     val hasPairing: Boolean = false,
     val pairedHost: String? = null,
-    val pairedPort: Int = 7010,
+    val pairedPort: Int = Prefs.DEFAULT_PORT,
     val syncEnabled: Boolean = true,
     val autoSendEnabled: Boolean = true,
     val mediaPermissionGranted: Boolean = false,
@@ -236,7 +236,7 @@ class SettingsViewModel : ViewModel() {
         _state.value = _state.value.copy(
             hasPairing = false,
             pairedHost = null,
-            pairedPort = 7010,
+            pairedPort = Prefs.DEFAULT_PORT,
             syncEnabled = false,
             status = ConnectionStatus.Disconnected,
             errors = emptyList()

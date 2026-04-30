@@ -19,6 +19,12 @@ extension NSPasteboard: PasteboardReading {
 }
 
 final class PasteboardWatcher: @unchecked Sendable {
+    private enum Defaults {
+        static let pollIntervalMs = 750
+        static let maxSuppressedDigests = 16
+        static let maxFileBytes = 20 * 1024 * 1024
+    }
+
     typealias Snapshot = ClipPayload
 
     private let pasteboard: PasteboardReading
@@ -32,7 +38,7 @@ final class PasteboardWatcher: @unchecked Sendable {
     private var continuations: [UUID: AsyncStream<Snapshot>.Continuation] = [:]
 
     init(pasteboard: PasteboardReading = NSPasteboard.general,
-         intervalMillis: Int = 500,
+         intervalMillis: Int = Defaults.pollIntervalMs,
          logger: Logger = Logger(label: "clipsync.pasteboard.watcher")) {
         self.pasteboard = pasteboard
         self.interval = .milliseconds(intervalMillis)
@@ -81,8 +87,8 @@ final class PasteboardWatcher: @unchecked Sendable {
             guard let self else { return }
             self.suppressedDigests.append(digest)
             // Keep a small bounded window.
-            if self.suppressedDigests.count > 8 {
-                self.suppressedDigests.removeFirst(self.suppressedDigests.count - 8)
+            if self.suppressedDigests.count > Defaults.maxSuppressedDigests {
+                self.suppressedDigests.removeFirst(self.suppressedDigests.count - Defaults.maxSuppressedDigests)
             }
             // Baseline the change count so the injection that just happened is skipped.
             self.lastChangeCount = self.pasteboard.changeCount

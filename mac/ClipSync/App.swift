@@ -34,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         errorStore: errorStore,
         onStartPairing: { [weak self] in self?.startPairing() },
         onTailscale: { [weak self] in self?.showTailscale() },
+        onToggleSync: { [weak self] in self?.toggleSync() },
         onQuit: { NSApp.terminate(nil) }
     )
     private var advertiser: BonjourAdvertiser?
@@ -190,6 +191,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         tailscaleWindow.show(onStartPairing: { [weak self] in
             self?.startPairing()
         })
+    }
+
+    private func toggleSync() {
+        let nowPaused = !menuBar.isSyncPaused
+        if nowPaused {
+            watcher.stop()
+            logger.info("Sync paused by user")
+        } else {
+            watcher.start()
+            logger.info("Sync resumed by user")
+        }
+        menuBar.setSyncPaused(nowPaused)
     }
 
     private func startPairing() {

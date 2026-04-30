@@ -55,7 +55,7 @@ final class Keychain: @unchecked Sendable {
         case errSecItemNotFound:
             var add = query
             add[kSecValueData as String] = data
-            add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+            add[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
             let addStatus = SecItemAdd(add as CFDictionary, nil)
             guard addStatus == errSecSuccess else {
                 throw KeychainError.unexpectedStatus(addStatus)

@@ -28,6 +28,11 @@ import com.clipsync.shizuku.ShizukuClipboardManager
 import com.clipsync.storage.Prefs
 import okhttp3.WebSocket
 import kotlin.math.min
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -64,20 +69,41 @@ class ClipForegroundService : Service() {
 
     // Health check
     private var consecutiveFailures = 0
-    private val healthCheckRunnable = object : Runnable {
+    private val healthScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private val healthCheckRunnable: Runnable = object : Runnable {
         override fun run() {
             val host = connectedHost ?: return
             val port = prefs.port
             val fp = prefs.fp ?: return
-            Thread {
-                val result = PairingApi().ping(host, port, fp)
-                handler.post {
-                    if (connectedHost == null) return@post  // disconnected while pinging
-                    if (result.isSuccess) {
-                        consecutiveFailures = 0
-                    } else {
+            healthScope.launch {
+                try {
+                    val result = PairingApi().ping(host, port, fp)
+                    handler.post {
+                        if (connectedHost == null) return@post  // disconnected while pinging
+                        if (result.isSuccess) {
+                            consecutiveFailures = 0
+                        } else {
+                            consecutiveFailures++
+                            L.warn(M, "health check failed ($consecutiveFailures/3): ${result.exceptionOrNull()?.message}")
+                            if (consecutiveFailures >= 3) {
+                                L.warn(M, "health check: 3 consecutive failures, treating as disconnected")
+                                _serviceState.value = ServiceState.Disconnected
+                                ws?.cancel()
+                                ws = null
+                                connectedHost = null
+                                consecutiveFailures = 0
+                                scheduleReconnect()
+                            }
+                        }
+                        if (connectedHost != null) {
+                            handler.postDelayed(healthCheckRunnable, HEALTH_CHECK_MS)
+                        }
+                    }
+                } catch (t: Throwable) {
+                    handler.post {
+                        if (connectedHost == null) return@post
                         consecutiveFailures++
-                        L.warn(M, "health check failed ($consecutiveFailures/3): ${result.exceptionOrNull()?.message}")
+                        L.warn(M, "health check exception ($consecutiveFailures/3): ${t.message}")
                         if (consecutiveFailures >= 3) {
                             L.warn(M, "health check: 3 consecutive failures, treating as disconnected")
                             _serviceState.value = ServiceState.Disconnected
@@ -87,12 +113,12 @@ class ClipForegroundService : Service() {
                             consecutiveFailures = 0
                             scheduleReconnect()
                         }
-                    }
-                    if (connectedHost != null) {
-                        handler.postDelayed(this, HEALTH_CHECK_MS)
+                        if (connectedHost != null) {
+                            handler.postDelayed(healthCheckRunnable, HEALTH_CHECK_MS)
+                        }
                     }
                 }
-            }.start()
+            }
         }
     }
 
@@ -100,6 +126,7 @@ class ClipForegroundService : Service() {
     private var shizukuManager: ShizukuClipboardManager? = null
     private var lastShizukuHash = 0
     private var shizukuHashSeeded = false        // true after first successful hash read
+    private var unchangedPolls = 0
 
     // Echo suppression: track what we last sent to Mac to avoid notifying on the bounce-back
     @Volatile private var lastSentToMacHash = 0
@@ -107,7 +134,12 @@ class ClipForegroundService : Service() {
     private val shizukuPollRunnable = object : Runnable {
         override fun run() {
             pollViaShizuku()
-            handler.postDelayed(this, SHIZUKU_POLL_MS)
+            val delay = when {
+                unchangedPolls > 20 -> 2000L  // idle: poll every 2s
+                unchangedPolls > 10 -> 1500L  // slowing down
+                else -> SHIZUKU_POLL_MS       // active: 1s
+            }
+            handler.postDelayed(this, delay)
         }
     }
 
@@ -229,6 +261,7 @@ class ClipForegroundService : Service() {
         shizukuManager = null
         handler.removeCallbacks(reconnectRunnable)
         handler.removeCallbacks(healthCheckRunnable)
+        healthScope.cancel()
         wsGeneration++  // invalidate any in-flight callbacks
         ws?.cancel()
         ws = null
@@ -330,6 +363,14 @@ class ClipForegroundService : Service() {
                 L.warn(M, "notify failed: ${t.message}")
             }
             return
+        }
+
+        if (payload.type == "image" || payload.type == "file") {
+            val estimatedBytes = payload.data.length * 3 / 4
+            if (estimatedBytes > ClipPayloadBuilder.MAX_IMAGE_BYTES) {
+                L.warn(M, "payload too large: ~${estimatedBytes / 1024}KB, dropping")
+                return
+            }
         }
 
         if (payload.type == "image") {
@@ -473,7 +514,11 @@ class ClipForegroundService : Service() {
             return
         }
 
-        if (hash == lastShizukuHash) return
+        if (hash == lastShizukuHash) {
+            unchangedPolls++
+            return
+        }
+        unchangedPolls = 0
 
         // Clipboard actually changed — apply filters before sending.
         if (!prefs.autoSendEnabled || !prefs.syncEnabled || !prefs.hasPairing()) return
@@ -572,7 +617,7 @@ class ClipForegroundService : Service() {
         private const val NOTIF_ID = 4242
         private const val INITIAL_BACKOFF_MS = 1_000L
         private const val MAX_BACKOFF_MS = 30_000L
-        private const val SHIZUKU_POLL_MS = 500L
+        private const val SHIZUKU_POLL_MS = 1000L
         private const val HEALTH_CHECK_MS = 15_000L
         const val ACTION_REFRESH_NOTIF = "com.clipsync.REFRESH_NOTIF"
 

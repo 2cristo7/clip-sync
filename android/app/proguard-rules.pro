@@ -45,3 +45,17 @@
 -keepattributes Signature
 -keepattributes Exceptions
 -keepattributes SourceFile,LineNumberTable
+
+# --- OkHttp internals ---
+-dontwarn okhttp3.internal.platform.**
+-keep class okhttp3.internal.** { *; }
+
+# --- Google ErrorProne annotations (transitive via tink / security-crypto) ---
+-dontwarn com.google.errorprone.annotations.CanIgnoreReturnValue
+-dontwarn com.google.errorprone.annotations.CheckReturnValue
+-dontwarn com.google.errorprone.annotations.Immutable
+-dontwarn com.google.errorprone.annotations.RestrictedApi
+
+# --- Shizuku ---
+-keep class rikka.shizuku.** { *; }
+-keep class moe.shizuku.** { *; }
