@@ -9,7 +9,7 @@ on:
 jobs:
   mac:
     name: macOS Build & Test
-    runs-on: macos-latest
+    runs-on: macos-14
     steps:
       - uses: actions/checkout@v4
 
@@ -23,6 +23,13 @@ jobs:
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-mac
+          path: mac/build/DerivedData/Logs/Test/
 
   android:
     name: Android Build & Test
@@ -39,6 +46,15 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Cache Gradle
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: gradle-
+
       - name: Build
         working-directory: android
         run: ./gradlew :app:assembleDebug
@@ -50,3 +66,10 @@ jobs:
       - name: Lint
         working-directory: android
         run: ./gradlew :app:lintDebug
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-android
+          path: android/app/build/reports/
