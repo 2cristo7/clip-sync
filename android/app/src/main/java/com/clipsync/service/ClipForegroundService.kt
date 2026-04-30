@@ -70,7 +70,7 @@ class ClipForegroundService : Service() {
     // Health check
     private var consecutiveFailures = 0
     private val healthScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private val healthCheckRunnable = object : Runnable {
+    private val healthCheckRunnable: Runnable = object : Runnable {
         override fun run() {
             val host = connectedHost ?: return
             val port = prefs.port
@@ -96,7 +96,7 @@ class ClipForegroundService : Service() {
                             }
                         }
                         if (connectedHost != null) {
-                            handler.postDelayed(this@run, HEALTH_CHECK_MS)
+                            handler.postDelayed(healthCheckRunnable, HEALTH_CHECK_MS)
                         }
                     }
                 } catch (t: Throwable) {
@@ -114,7 +114,7 @@ class ClipForegroundService : Service() {
                             scheduleReconnect()
                         }
                         if (connectedHost != null) {
-                            handler.postDelayed(this@run, HEALTH_CHECK_MS)
+                            handler.postDelayed(healthCheckRunnable, HEALTH_CHECK_MS)
                         }
                     }
                 }
