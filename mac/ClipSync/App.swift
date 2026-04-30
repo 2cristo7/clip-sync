@@ -116,8 +116,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 } catch {
                     // Ignore cancellation — this is an intentional shutdown.
                     if Task.isCancelled { break }
-                    retries += 1
+                    let description = String(describing: error)
+                    let isPortInUse = description.contains("addressInUse")
+                        || description.contains("EADDRINUSE")
+                        || description.localizedCaseInsensitiveContains("address already in use")
                     let logger = await self?.logger
+                    let errorStore = self?.errorStore
+                    let port = ServerConfig.defaultPort
+
+                    if isPortInUse {
+                        logger?.error("Port \(port) already in use — another ClipSync instance may be running")
+                        await MainActor.run {
+                            errorStore?.appendAndNotify(AppError(
+                                severity: .error,
+                                summary: "Port \(port) already in use",
+                                detail: "Another ClipSync instance is already running.",
+                                suggestion: "Quit the other instance from the menu bar."
+                            ))
+                        }
+                        break  // No point retrying — port won't free itself
+                    }
+
+                    retries += 1
                     logger?.error("Server crashed (attempt \(retries)/\(maxRetries)): \(error)")
 
                     if retries < maxRetries {
@@ -126,7 +146,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                         if Task.isCancelled { break }
                     } else {
                         logger?.error("Server failed after \(maxRetries) attempts, giving up")
-                        let errorStore = self?.errorStore
                         let detail = error.localizedDescription
                         await MainActor.run {
                             errorStore?.appendAndNotify(AppError(
