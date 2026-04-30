@@ -91,6 +91,8 @@ import com.clipsync.ui.theme.NeuStatusBadge
 import com.clipsync.ui.theme.NeuStatusPill
 import com.clipsync.ui.theme.NeuStatusRow
 import com.clipsync.ui.theme.NeuToggleRow
+import com.clipsync.model.ErrorAction
+import com.clipsync.ui.components.ErrorBanner
 
 @Composable
 fun SettingsScreen(
@@ -723,15 +725,19 @@ fun SettingsScreen(
                 divider = false,
             )
 
-            // Error message
-            state.error?.let { error ->
-                NeuCard {
-                    Text(
-                        "⚠️ $error",
-                        color = NeuColors.Error,
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
+            // Error messages
+            state.errors.forEach { error ->
+                ErrorBanner(
+                    error = error,
+                    onDismiss = { vm.dismissError(error.id) },
+                    onAction = { action ->
+                        when (action) {
+                            is ErrorAction.Retry -> vm.startSync(context)
+                            is ErrorAction.Repair -> { /* TODO: navigate to re-pair */ }
+                            is ErrorAction.OpenUrl -> { /* TODO: open URL */ }
+                        }
+                    }
+                )
             }
 
             Spacer(Modifier.height(16.dp))

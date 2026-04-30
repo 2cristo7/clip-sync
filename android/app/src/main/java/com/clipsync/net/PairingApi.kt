@@ -73,21 +73,18 @@ class PairingApi(
     }
 
     /**
-     * Returns true if the server at [host]:[port] responds to any HTTP request.
+     * Returns [Result.success] with `true` if the server at [host]:[port] responds to a ping.
+     * Returns [Result.failure] with the underlying exception on network or TLS errors.
      * Uses the stored fingerprint for TLS pinning. Timeout: 3 seconds.
      */
-    fun ping(host: String, port: Int, fp: String): Boolean {
-        return try {
-            val client = clientFactory.pinnedClient(host, fp)
-                .newBuilder()
-                .callTimeout(3, TimeUnit.SECONDS)
-                .connectTimeout(3, TimeUnit.SECONDS)
-                .build()
-            val req = Request.Builder().url("https://$host:$port/ping").head().build()
-            client.newCall(req).execute().use { true }
-        } catch (_: Exception) {
-            false
-        }
+    fun ping(host: String, port: Int, fp: String): Result<Boolean> = runCatching {
+        val client = clientFactory.pinnedClient(host, fp)
+            .newBuilder()
+            .callTimeout(3, TimeUnit.SECONDS)
+            .connectTimeout(3, TimeUnit.SECONDS)
+            .build()
+        val req = Request.Builder().url("https://$host:$port/ping").head().build()
+        client.newCall(req).execute().use { true }
     }
 
     class PairingException(message: String) : Exception(message)

@@ -18,7 +18,7 @@ struct ClipSyncApp: App {
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private let hub = WebSocketHub()
+    private lazy var hub = WebSocketHub(errorStore: errorStore)
     private let watcher = PasteboardWatcher()
     private lazy var injector = PasteboardInjector(watcher: watcher)
     private let keychain = Keychain()
@@ -28,8 +28,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let tlsManager = TLSManager()
     private lazy var hmacValidator = HMACValidator(secret: pairingSecret)
     private var server: ClipServer?
+    let errorStore = ErrorStore()
     private lazy var menuBar = MenuBarController(
         hub: hub,
+        errorStore: errorStore,
         onStartPairing: { [weak self] in self?.startPairing() },
         onTailscale: { [weak self] in self?.showTailscale() },
         onQuit: { NSApp.terminate(nil) }
@@ -39,6 +41,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let pairingWindow = PairingWindowController()
     private let tailscaleWindow = TailscaleWindowController()
     private var broadcastTask: Task<Void, Never>?
+    private var serverTask: Task<Void, Never>?
     private var logger = Logger(label: "clipsync.app")
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -57,6 +60,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             tlsConfig = try tlsManager.makeServerTLSConfiguration()
         } catch {
             logger.error("Failed to initialise TLS identity: \(error)")
+            errorStore.append(AppError(
+                severity: .warning,
+                summary: "Running without TLS encryption",
+                detail: "TLS setup failed: \(error.localizedDescription)",
+                suggestion: "Restart ClipSync. Clipboard data will be sent unencrypted on your network."
+            ))
         }
         menuBar.install()
         let server = ClipServer(
@@ -65,7 +74,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             pairing: pairing,
             tokenStore: tokenStore,
             hmacValidator: hmacValidator,
-            tlsConfiguration: tlsConfig
+            tlsConfiguration: tlsConfig,
+            errorStore: errorStore
         )
         self.server = server
         startPipeline()
@@ -74,6 +84,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         broadcastTask?.cancel()
+        serverTask?.cancel()
         watcher.stop()
         server?.stop()
         reachabilityMonitor?.stop()
@@ -90,7 +101,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         watcher.start()
-        server?.start()
+
+        serverTask = Task.detached { [weak self] in
+            guard let server = await self?.server else { return }
+            var retries = 0
+            let maxRetries = 3
+
+            while retries < maxRetries {
+                do {
+                    try await server.run()
+                    // run() returned normally — clean shutdown, stop retrying.
+                    break
+                } catch {
+                    // Ignore cancellation — this is an intentional shutdown.
+                    if Task.isCancelled { break }
+                    retries += 1
+                    let logger = await self?.logger
+                    logger?.error("Server crashed (attempt \(retries)/\(maxRetries)): \(error)")
+
+                    if retries < maxRetries {
+                        logger?.info("Restarting server in 5s...")
+                        try? await Task.sleep(for: .seconds(5))
+                        if Task.isCancelled { break }
+                    } else {
+                        logger?.error("Server failed after \(maxRetries) attempts, giving up")
+                        let errorStore = self?.errorStore
+                        let detail = error.localizedDescription
+                        await MainActor.run {
+                            errorStore?.appendAndNotify(AppError(
+                                severity: .error,
+                                summary: "Server stopped unexpectedly",
+                                detail: detail,
+                                suggestion: "Restart ClipSync manually."
+                            ))
+                        }
+                    }
+                }
+            }
+        }
     }
 
     private func startAdvertising() {
@@ -107,10 +155,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             serviceName: name,
             txtRecord: txt
         )
+        advertiser.onPublishFailed = { [weak self] error in
+            Task { @MainActor in
+                self?.errorStore.append(AppError(
+                    severity: .warning,
+                    summary: "mDNS advertising failed",
+                    detail: error.localizedDescription,
+                    suggestion: "Devices on your network may not find this Mac automatically."
+                ))
+            }
+        }
         advertiser.start()
         self.advertiser = advertiser
 
         let reachability = ReachabilityMonitor(advertiser: advertiser)
+        reachability.onNetworkChange = { [weak self] in
+            Task { @MainActor in
+                self?.logger.info("Network changed — verifying server health")
+            }
+        }
         reachability.start()
         self.reachabilityMonitor = reachability
     }

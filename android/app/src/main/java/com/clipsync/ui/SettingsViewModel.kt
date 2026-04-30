@@ -12,6 +12,7 @@ import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import androidx.core.content.ContextCompat
 import com.clipsync.discovery.Discovered
+import com.clipsync.discovery.DiscoveryEvent
 import com.clipsync.discovery.NsdDiscovery
 import com.clipsync.net.PairingApi
 import android.content.Intent
@@ -19,6 +20,9 @@ import android.provider.Settings
 import com.clipsync.service.ClipForegroundService
 import com.clipsync.shizuku.ShizukuClipboardManager
 import com.clipsync.storage.Prefs
+import com.clipsync.model.AppError
+import com.clipsync.model.ErrorAction
+import com.clipsync.model.ErrorSeverity
 import com.clipsync.util.L
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -73,7 +77,7 @@ data class SettingsState(
     val isOnMobileData: Boolean = false,
     val isOnWifi: Boolean = false,
     val isTailscaleVpnActive: Boolean = false,
-    val error: String? = null
+    val errors: List<AppError> = emptyList()
 )
 
 class SettingsViewModel : ViewModel() {
@@ -83,6 +87,15 @@ class SettingsViewModel : ViewModel() {
 
     private var discoveryJob: Job? = null
     private var networkWatchJob: Job? = null
+
+    private fun addError(error: AppError) {
+        val current = _state.value.errors + error
+        _state.value = _state.value.copy(errors = current.takeLast(10))
+    }
+
+    fun dismissError(id: String) {
+        _state.value = _state.value.copy(errors = _state.value.errors.filter { it.id != id })
+    }
 
     fun bootstrap(context: Context) {
         try {
@@ -108,22 +121,32 @@ class SettingsViewModel : ViewModel() {
             refreshTailscaleState(context)
             startNetworkWatch(context)
 
-            if (paired) {
-                val host = prefs.host ?: return
-                val port = prefs.port
-                val fp = prefs.fp ?: return
-                viewModelScope.launch {
-                    val alive = withContext(Dispatchers.IO) {
-                        PairingApi().ping(host, port, fp)
+            viewModelScope.launch {
+                ClipForegroundService.serviceState.collect { svcState ->
+                    val newStatus = when (svcState) {
+                        is ClipForegroundService.ServiceState.Disconnected -> ConnectionStatus.Disconnected
+                        is ClipForegroundService.ServiceState.Connecting -> ConnectionStatus.Connecting
+                        is ClipForegroundService.ServiceState.Connected -> ConnectionStatus.Connected(svcState.host)
+                        is ClipForegroundService.ServiceState.Paused -> ConnectionStatus.Paused(svcState.host)
                     }
-                    _state.value = _state.value.copy(
-                        status = if (alive) ConnectionStatus.Connected(host)
-                                 else ConnectionStatus.Disconnected
-                    )
+                    _state.value = _state.value.copy(status = newStatus)
+
+                    // Restart discovery when disconnected so Mac reappears in list
+                    if (svcState is ClipForegroundService.ServiceState.Disconnected && _state.value.hasPairing) {
+                        delay(2000)
+                        startDiscovery(context.applicationContext)
+                    }
                 }
             }
         } catch (t: Throwable) {
             L.error(M, "bootstrap failed reading prefs", t)
+            addError(AppError(
+                severity = ErrorSeverity.ERROR,
+                summary = "Startup failed",
+                detail = t.stackTraceToString().take(500),
+                suggestion = "Restart the app. If the problem persists, try clearing app data.",
+                action = ErrorAction.Retry,
+            ))
         }
     }
 
@@ -152,9 +175,15 @@ class SettingsViewModel : ViewModel() {
         if (isTailscaleHost(host) && !_state.value.isTailscaleVpnActive) {
             L.warn(M, "startSync blocked: Tailscale IP but VPN not active")
             _state.value = _state.value.copy(
-                status = ConnectionStatus.Error("Tailscale VPN is not active. Open Tailscale first."),
-                error = "Tailscale VPN is not active. Open Tailscale first."
+                status = ConnectionStatus.Error("Tailscale VPN is not active. Open Tailscale first.")
             )
+            addError(AppError(
+                severity = ErrorSeverity.ERROR,
+                summary = "Tailscale VPN is not active",
+                detail = "The host $host is a Tailscale address but the VPN is not connected.",
+                suggestion = "Open Tailscale and connect, then try again.",
+                action = ErrorAction.Retry,
+            ))
             return
         }
 
@@ -163,13 +192,32 @@ class SettingsViewModel : ViewModel() {
         ClipForegroundService.start(context)
 
         viewModelScope.launch {
-            val alive = if (fp != null) {
-                withContext(Dispatchers.IO) { PairingApi().ping(host, port, fp) }
-            } else false
-            _state.value = _state.value.copy(
-                status = if (alive) ConnectionStatus.Connected(host)
-                         else ConnectionStatus.Error("Could not reach $host")
-            )
+            if (fp != null) {
+                val result = withContext(Dispatchers.IO) { PairingApi().ping(host, port, fp) }
+                result.fold(
+                    onSuccess = { alive ->
+                        _state.value = _state.value.copy(
+                            status = if (alive) ConnectionStatus.Connected(host)
+                                     else ConnectionStatus.Error("Could not reach $host")
+                        )
+                    },
+                    onFailure = { error ->
+                        _state.value = _state.value.copy(
+                            status = ConnectionStatus.Error("Could not reach $host")
+                        )
+                        addError(AppError(
+                            severity = ErrorSeverity.WARNING,
+                            summary = "Server not responding",
+                            detail = error.message,
+                            suggestion = "Check that the Mac is running ClipSync.",
+                        ))
+                    }
+                )
+            } else {
+                _state.value = _state.value.copy(
+                    status = ConnectionStatus.Error("Could not reach $host")
+                )
+            }
         }
     }
 
@@ -191,7 +239,7 @@ class SettingsViewModel : ViewModel() {
             pairedPort = 7010,
             syncEnabled = false,
             status = ConnectionStatus.Disconnected,
-            error = null
+            errors = emptyList()
         )
     }
 
@@ -200,14 +248,44 @@ class SettingsViewModel : ViewModel() {
         val nsd = NsdDiscovery(context)
         discoveryJob = viewModelScope.launch(Dispatchers.IO) {
             try {
-                nsd.discover().collect { d ->
-                    val isNew = _state.value.discovered.none { it.name == d.name }
-                    if (isNew) L.event(M, "discovery found name=${d.name} host=${d.host}:${d.port}")
-                    val merged = (_state.value.discovered + d).distinctBy { it.name }
-                    _state.value = _state.value.copy(discovered = merged)
+                nsd.discover().collect { event ->
+                    when (event) {
+                        is DiscoveryEvent.Found -> {
+                            val d = event.info
+                            val isNew = _state.value.discovered.none { it.name == d.name }
+                            if (isNew) L.event(M, "discovery found name=${d.name} host=${d.host}:${d.port}")
+                            val merged = (_state.value.discovered + d).distinctBy { it.name }
+                            _state.value = _state.value.copy(discovered = merged)
+                        }
+                        is DiscoveryEvent.Lost -> {
+                            val filtered = _state.value.discovered.filter { it.name != event.name }
+                            _state.value = _state.value.copy(discovered = filtered)
+                            L.event(M, "discovery lost name=${event.name}")
+                        }
+                        is DiscoveryEvent.Error -> {
+                            L.warn(M, "discovery error: ${event.message}")
+                            addError(AppError(
+                                severity = ErrorSeverity.WARNING,
+                                summary = "Can't find servers on network",
+                                detail = event.message,
+                                suggestion = "Check that both devices are on the same Wi-Fi network.",
+                            ))
+                        }
+                    }
                 }
             } catch (t: Throwable) {
                 L.warn(M, "discovery crashed: ${t.message}")
+                addError(AppError(
+                    severity = ErrorSeverity.WARNING,
+                    summary = "Network discovery interrupted",
+                    detail = t.message,
+                    suggestion = "Discovery will restart on next network change.",
+                ))
+            }
+            // Auto-restart discovery after unexpected completion (with backoff)
+            if (_state.value.status is ConnectionStatus.Disconnected) {
+                delay(5000)
+                startDiscovery(context)
             }
         }
     }
@@ -222,14 +300,20 @@ class SettingsViewModel : ViewModel() {
         if (target is PairingTarget.Manual && isTailscaleHost(target.host) && !_state.value.isTailscaleVpnActive) {
             L.warn(M, "pair blocked: Tailscale IP but VPN not active")
             _state.value = _state.value.copy(
-                status = ConnectionStatus.Error("Tailscale VPN is not active. Open Tailscale first."),
-                error = "Tailscale VPN is not active. Open Tailscale first."
+                status = ConnectionStatus.Error("Tailscale VPN is not active. Open Tailscale first.")
             )
+            addError(AppError(
+                severity = ErrorSeverity.ERROR,
+                summary = "Tailscale VPN is not active",
+                detail = "The host ${target.host} is a Tailscale address but the VPN is not connected.",
+                suggestion = "Open Tailscale and connect, then try again.",
+                action = ErrorAction.Retry,
+            ))
             return
         }
 
         viewModelScope.launch {
-            _state.value = _state.value.copy(status = ConnectionStatus.Connecting, error = null)
+            _state.value = _state.value.copy(status = ConnectionStatus.Connecting, errors = emptyList())
             try {
                 val prefs = Prefs(context)
                 val api = PairingApi()
@@ -259,10 +343,36 @@ class SettingsViewModel : ViewModel() {
                 }
             } catch (t: Throwable) {
                 L.error(M, "pair failed", t)
+                val appError = when {
+                    t is javax.net.ssl.SSLHandshakeException ->
+                        AppError(
+                            severity = ErrorSeverity.ERROR,
+                            summary = "Certificate mismatch",
+                            detail = t.message,
+                            suggestion = "The Mac app regenerated its certificate. Re-pair to fix.",
+                            action = ErrorAction.Repair,
+                        )
+                    t is java.net.ConnectException ->
+                        AppError(
+                            severity = ErrorSeverity.ERROR,
+                            summary = "Server unreachable",
+                            detail = t.message,
+                            suggestion = "Check that both devices are on the same network.",
+                            action = ErrorAction.Retry,
+                        )
+                    else ->
+                        AppError(
+                            severity = ErrorSeverity.ERROR,
+                            summary = "Connection failed",
+                            detail = t.message ?: "Unknown error",
+                            suggestion = "Try again.",
+                            action = ErrorAction.Retry,
+                        )
+                }
                 _state.value = _state.value.copy(
-                    status = ConnectionStatus.Error(t.message ?: "unknown"),
-                    error = t.message
+                    status = ConnectionStatus.Error(appError.summary)
                 )
+                addError(appError)
             }
         }
     }
@@ -292,14 +402,9 @@ class SettingsViewModel : ViewModel() {
             pairedPort = port,
             mode = mode,
             status = ConnectionStatus.Connecting,
-            error = null
+            errors = emptyList()
         )
         ClipForegroundService.start(context)
-        val alive = withContext(Dispatchers.IO) { PairingApi().ping(host, port, fp) }
-        _state.value = _state.value.copy(
-            status = if (alive) ConnectionStatus.Connected(host)
-                     else ConnectionStatus.Error("Paired but could not verify connection to $host")
-        )
     }
 
     fun refreshShizukuState(context: Context) {
@@ -469,6 +574,12 @@ class SettingsViewModel : ViewModel() {
             Shizuku.requestPermission(ShizukuClipboardManager.PERMISSION_REQUEST_CODE)
         } catch (e: Exception) {
             L.warn(M, "requestShizukuPermission failed: ${e.message}")
+            addError(AppError(
+                severity = ErrorSeverity.WARNING,
+                summary = "Shizuku permission request failed",
+                detail = e.message,
+                suggestion = "Make sure Shizuku is running. Open Shizuku app and start the service.",
+            ))
         }
     }
 
@@ -506,7 +617,7 @@ class SettingsViewModel : ViewModel() {
                         isOnMobileData = onMobile,
                         isTailscaleVpnActive = vpnActive,
                     )
-                    if (onWifi && !prev.isOnWifi) startDiscovery(appContext)
+                    startDiscovery(appContext)
                 }
             }
         }

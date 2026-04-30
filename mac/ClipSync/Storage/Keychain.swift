@@ -97,3 +97,14 @@ final class Keychain: @unchecked Sendable {
         return Data(buffer)
     }
 }
+
+extension KeychainError: LocalizedError {
+    var errorDescription: String? {
+        switch self {
+        case .unexpectedStatus(let s): return "Keychain error (OSStatus \(s))"
+        case .notFound: return "Item not found in Keychain"
+        case .dataConversionFailure: return "Failed to decode Keychain data"
+        case .randomGenerationFailed(let s): return "Secure random generation failed (OSStatus \(s))"
+        }
+    }
+}

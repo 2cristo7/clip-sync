@@ -9,6 +9,13 @@ final class BonjourAdvertiser: NSObject {
     private var logger: Logger
     private var service: NetService?
 
+    /// `true` once `netServiceDidPublish` fires; reset to `false` on failure or stop.
+    private(set) var isPublished = false
+
+    /// Called on the main thread when mDNS publishing fails.
+    /// The `Error` argument is an `NSError` constructed from the NetService error dict.
+    var onPublishFailed: ((Error) -> Void)?
+
     init(serviceType: String = "_clipsync._tcp",
          port: Int32,
          serviceName: String,
@@ -68,6 +75,7 @@ final class BonjourAdvertiser: NSObject {
 
 extension BonjourAdvertiser: NetServiceDelegate {
     func netServiceDidPublish(_ sender: NetService) {
+        isPublished = true
         logger.info("mDNS published", metadata: [
             "name": .string(sender.name),
             "port": .stringConvertible(sender.port),
@@ -75,9 +83,17 @@ extension BonjourAdvertiser: NetServiceDelegate {
     }
 
     func netService(_ sender: NetService, didNotPublish errorDict: [String: NSNumber]) {
+        isPublished = false
+        let code = errorDict[NetService.errorCode]?.intValue ?? -1
+        let error = NSError(
+            domain: NetService.errorDomain,
+            code: code,
+            userInfo: [NSLocalizedDescriptionKey: "mDNS publish failed (code \(code)) for '\(sender.name)'"]
+        )
         logger.error("mDNS publish failed", metadata: [
             "name": .string(sender.name),
             "error": .string(String(describing: errorDict)),
         ])
+        onPublishFailed?(error)
     }
 }

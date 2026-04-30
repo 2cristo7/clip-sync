@@ -1,6 +1,8 @@
 import Foundation
 import HummingbirdWebSocket
 import Logging
+import NIOCore
+import NIOWebSocket
 
 struct ClipClientInfo: Sendable, Hashable {
     let id: UUID
@@ -38,9 +40,14 @@ actor WebSocketHub {
     private var clients: Set<Client> = []
     private var continuations: [UUID: AsyncStream<[ClipClientInfo]>.Continuation] = [:]
     private var logger: Logger
+    let errorStore: ErrorStore
+    private var lastDisconnectErrorTime: Date?
+    private var pingTask: Task<Void, Never>?
 
-    init(logger: Logger = Logger(label: "clipsync.ws.hub")) {
+    init(logger: Logger = Logger(label: "clipsync.ws.hub"),
+         errorStore: ErrorStore) {
         self.logger = logger
+        self.errorStore = errorStore
     }
 
     var clientCount: Int { clients.count }
@@ -98,6 +105,72 @@ actor WebSocketHub {
         }
     }
 
+    func startPingLoop() {
+        guard pingTask == nil else { return }
+        pingTask = Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 30_000_000_000)
+                guard !Task.isCancelled else { break }
+                await self.pingAllClients()
+            }
+        }
+    }
+
+    func stop() {
+        pingTask?.cancel()
+        pingTask = nil
+    }
+
+    private func pingAllClients() async {
+        guard !clients.isEmpty else { return }
+        logger.debug("WebSocket ping cycle", metadata: ["clients": .stringConvertible(clients.count)])
+
+        let pingFrame = WebSocketFrame(fin: true, opcode: .ping, data: ByteBuffer())
+        let snapshot = clients
+        var didChange = false
+        let now = Date()
+
+        for client in snapshot {
+            // Timeout: unregister clients that haven't responded in 45 seconds.
+            if now.timeIntervalSince(client.lastSeen) > 45 {
+                logger.info("WebSocket client timed out", metadata: [
+                    "id": .string(client.id.uuidString),
+                    "lastSeen": .stringConvertible(client.lastSeen),
+                ])
+                clients.remove(client)
+                didChange = true
+                continue
+            }
+
+            // Send a ping frame to detect broken connections.
+            do {
+                try await client.outbound.write(.custom(pingFrame))
+                client.lastSeen = Date()
+            } catch {
+                logger.debug("Dropping client after ping failure", metadata: [
+                    "id": .string(client.id.uuidString),
+                    "error": .string(String(describing: error)),
+                ])
+                clients.remove(client)
+                didChange = true
+                let errorNow = Date()
+                if lastDisconnectErrorTime == nil || errorNow.timeIntervalSince(lastDisconnectErrorTime!) > 5 {
+                    lastDisconnectErrorTime = errorNow
+                    let store = errorStore
+                    Task { @MainActor in
+                        store.append(AppError(
+                            severity: .warning,
+                            summary: "Device disconnected",
+                            detail: "WebSocket ping failed for client",
+                            suggestion: "The device will reconnect automatically."
+                        ))
+                    }
+                }
+            }
+        }
+        if didChange { notifyChange() }
+    }
+
     func broadcast(_ payload: ClipPayload) async {
         guard !clients.isEmpty else { return }
         let text: String
@@ -124,6 +197,19 @@ actor WebSocketHub {
                 ])
                 clients.remove(client)
                 didChange = true
+                let now = Date()
+                if lastDisconnectErrorTime == nil || now.timeIntervalSince(lastDisconnectErrorTime!) > 5 {
+                    lastDisconnectErrorTime = now
+                    let store = errorStore
+                    Task { @MainActor in
+                        store.append(AppError(
+                            severity: .warning,
+                            summary: "Device disconnected",
+                            detail: "WebSocket write failed for client",
+                            suggestion: "The device will reconnect automatically."
+                        ))
+                    }
+                }
             }
         }
         if didChange { notifyChange() }
