@@ -28,9 +28,21 @@ struct PairingView: View {
         VStack(spacing: 20) {
             Text("Pair Device")
                 .font(.title2.weight(.semibold))
-            Text(formattedCode)
-                .font(.system(size: 52, weight: .semibold, design: .monospaced))
-                .tracking(6)
+            HStack(spacing: 8) {
+                ForEach(0..<6, id: \.self) { i in
+                    let chars = Array(code)
+                    let digit = i < chars.count ? String(chars[i]) : ""
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(Color(NSColor.controlBackgroundColor))
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color.secondary.opacity(0.3), lineWidth: 1)
+                        Text(digit)
+                            .font(.system(size: 28, weight: .semibold, design: .monospaced))
+                    }
+                    .frame(width: 44, height: 52)
+                }
+            }
             if let qr = cachedQRImage {
                 Image(nsImage: qr)
                     .interpolation(.none)
@@ -72,12 +84,6 @@ struct PairingView: View {
         expiresAt = session.expiresAt
         cachedQRImage = Self.generateQRImage(for: pairingURL)
         updateRemaining()
-    }
-
-    private var formattedCode: String {
-        guard code.count == 6 else { return code }
-        let half = code.index(code.startIndex, offsetBy: 3)
-        return "\(code[..<half]) \(code[half...])"
     }
 
     private var pairingURL: String {

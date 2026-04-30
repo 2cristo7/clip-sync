@@ -63,13 +63,14 @@ import com.clipsync.ui.sections.TailscaleSection
 import com.clipsync.ui.theme.NeuButton
 import com.clipsync.ui.theme.NeuColors
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.unit.sp
 import android.text.TextUtils
 import kotlinx.coroutines.delay
 
@@ -394,8 +395,9 @@ private fun PairingCodeDialog(
 ) {
     var code by remember { mutableStateOf("") }
     var remainingSeconds by remember { mutableIntStateOf(120) }
-    val focusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    LaunchedEffect(code) {
+        if (code.length == 6) onConfirm(code)
+    }
     LaunchedEffect(Unit) {
         while (remainingSeconds > 0) {
             delay(1000)
@@ -429,23 +431,9 @@ private fun PairingCodeDialog(
                     color = if (remainingSeconds <= 30) NeuColors.Error else NeuColors.TextSecondary,
                 )
                 Spacer(Modifier.height(8.dp))
-                OutlinedTextField(
+                OtpCodeInput(
                     value = code,
-                    onValueChange = { code = it.filter { c -> c.isDigit() }.take(6) },
-                    label = { Text("6-digit code") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
-                    keyboardActions = KeyboardActions(onDone = { if (code.length == 6) onConfirm(code) }),
-                    supportingText = {
-                        Text("${code.length}/6 digits")
-                    },
-                    textStyle = MaterialTheme.typography.headlineMedium.copy(
-                        letterSpacing = 8.sp,
-                        fontWeight = FontWeight.Bold,
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .focusRequester(focusRequester),
+                    onValueChange = { code = it },
                 )
             }
         },
@@ -472,6 +460,55 @@ private fun PairingCodeDialog(
 sealed class PairingTarget {
     data class Auto(val discovered: com.clipsync.discovery.Discovered) : PairingTarget()
     data class Manual(val host: String, val port: Int) : PairingTarget()
+}
+
+@Composable
+private fun OtpCodeInput(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    val boxShape = RoundedCornerShape(10.dp)
+
+    BasicTextField(
+        value = value,
+        onValueChange = { onValueChange(it.filter { c -> c.isDigit() }.take(6)) },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
+        modifier = modifier.focusRequester(focusRequester),
+        decorationBox = {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                repeat(6) { i ->
+                    val char = value.getOrNull(i)
+                    val isCurrent = i == value.length
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .size(44.dp)
+                            .background(NeuColors.SurfaceInset, boxShape)
+                            .border(
+                                BorderStroke(
+                                    if (isCurrent) 2.dp else 1.dp,
+                                    if (isCurrent) NeuColors.Accent else NeuColors.Border,
+                                ),
+                                boxShape,
+                            ),
+                    ) {
+                        Text(
+                            text = char?.toString() ?: "",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = NeuColors.TextPrimary,
+                        )
+                    }
+                }
+            }
+        },
+    )
 }
 
 private fun isAccessibilityServiceEnabled(context: android.content.Context): Boolean {
