@@ -105,7 +105,7 @@ fun SettingsScreen(
     val state by vm.state.collectAsState()
     var pairingTarget by remember { mutableStateOf<PairingTarget?>(null) }
     var manualHost by rememberSaveable { mutableStateOf("") }
-    var manualPort by rememberSaveable { mutableStateOf("7010") }
+    var manualPort by rememberSaveable { mutableStateOf(Prefs.DEFAULT_PORT.toString()) }
 
     val mediaPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -117,7 +117,7 @@ fun SettingsScreen(
         val uri = deepLinkUri ?: return@LaunchedEffect
         if (uri.scheme == "clipsync" && uri.host == "pair") {
             val host = uri.getQueryParameter("host") ?: return@LaunchedEffect
-            val port = uri.getQueryParameter("port")?.toIntOrNull() ?: 7010
+            val port = uri.getQueryParameter("port")?.toIntOrNull() ?: Prefs.DEFAULT_PORT
             val code = uri.getQueryParameter("code") ?: return@LaunchedEffect
             vm.pair(context, PairingTarget.Manual(host, port), code)
         }
@@ -631,7 +631,7 @@ fun SettingsScreen(
                                     onClick = {
                                         pairingTarget = PairingTarget.Manual(
                                             host = hostTrimmed,
-                                            port = portNum ?: 7010
+                                            port = portNum ?: Prefs.DEFAULT_PORT
                                         )
                                     },
                                     enabled = hostValid && portValid && !vpnBlocked,

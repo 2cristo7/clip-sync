@@ -36,7 +36,7 @@ class Prefs(context: Context) {
         set(v) { prefs.edit().putString(K_HOST, v).apply() }
 
     var port: Int
-        get() = prefs.getInt(K_PORT, 7010)
+        get() = prefs.getInt(K_PORT, DEFAULT_PORT)
         set(v) { prefs.edit().putInt(K_PORT, v).apply() }
 
     var mode: String
@@ -87,5 +87,6 @@ class Prefs(context: Context) {
         private const val K_AUTO_SEND = "auto_send_enabled"
         const val MODE_AUTO = "auto"
         const val MODE_MANUAL = "manual"
+        const val DEFAULT_PORT = 7010
     }
 }

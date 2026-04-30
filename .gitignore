@@ -60,3 +60,9 @@ yarn-error.log*
 *.swp
 .env
 .env.local
+
+# Certificates and secrets
+*.pem
+*.key
+*.p12
+secrets/
