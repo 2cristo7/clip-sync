@@ -3,6 +3,7 @@ package com.clipsync.overlay
 import com.clipsync.crypto.HmacSigner
 import com.clipsync.model.ClipPayload
 import com.clipsync.net.ClipClient
+import com.clipsync.util.L
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -65,17 +66,43 @@ class ClipSender(
         lastSentHash = payload.data.hashCode()
         lastSentMs = System.currentTimeMillis()
 
-        return try {
-            client.newCall(req).execute().use { resp ->
-                if (resp.isSuccessful) Result.Ok
-                else Result.Failed("HTTP ${resp.code}")
+        var lastError: Throwable? = null
+        val backoffMs = longArrayOf(1000, 2000, 4000)
+
+        repeat(3) { attempt ->
+            try {
+                client.newCall(req).execute().use { resp ->
+                    if (resp.isSuccessful) return Result.Ok
+                    if (!isTransientHttp(resp.code)) {
+                        return Result.Failed("HTTP ${resp.code}: ${resp.body?.string()?.take(200) ?: "no body"}")
+                    }
+                    L.warn(M, "transient HTTP ${resp.code}, retry ${attempt + 1}/3")
+                }
+            } catch (t: Throwable) {
+                if (!isTransient(t)) {
+                    return Result.Failed(t.message ?: "network error")
+                }
+                lastError = t
+                L.warn(M, "transient error: ${t.message}, retry ${attempt + 1}/3")
             }
-        } catch (t: Throwable) {
-            Result.Failed(t.message ?: "network error")
+            if (attempt < 2) {
+                Thread.sleep(backoffMs[attempt])
+            }
         }
+        return Result.Failed("Failed after 3 attempts: ${lastError?.message}")
     }
 
+    private fun isTransient(t: Throwable): Boolean = when {
+        t is java.net.SocketTimeoutException -> true
+        t is java.net.ConnectException -> true
+        t is java.io.IOException && t.message?.contains("timeout") == true -> true
+        else -> false
+    }
+
+    private fun isTransientHttp(code: Int): Boolean = code in 500..599 || code == 429
+
     companion object {
+        private const val M = "ClipSender"
         private val JSON = "application/json; charset=utf-8".toMediaType()
 
         @Volatile var lastSentHash: Int = 0
