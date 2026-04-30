@@ -109,7 +109,15 @@ class IncomingClipNotifier(
             context, ImageCache.AUTHORITY, imageFile
         )
         val bitmap: Bitmap? = try {
-            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            if (bytes.size > 5 * 1024 * 1024) {
+                val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+                opts.inSampleSize = calculateInSampleSize(opts, 512, 512)
+                opts.inJustDecodeBounds = false
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+            } else {
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            }
         } catch (t: Throwable) {
             L.warn(M, "decodeByteArray failed: ${t.message}")
             null
@@ -140,13 +148,17 @@ class IncomingClipNotifier(
             .setAutoCancel(true)
             .setContentIntent(tapPi)
             .addAction(0, context.getString(R.string.action_save_to_gallery), savePi)
-        if (bitmap != null) {
-            builder.setLargeIcon(bitmap)
-            builder.setStyle(
-                NotificationCompat.BigPictureStyle()
-                    .bigPicture(bitmap)
-                    .bigLargeIcon(null as Bitmap?)
-            )
+        try {
+            if (bitmap != null) {
+                builder.setLargeIcon(bitmap)
+                builder.setStyle(
+                    NotificationCompat.BigPictureStyle()
+                        .bigPicture(bitmap)
+                        .bigLargeIcon(null as Bitmap?)
+                )
+            }
+        } finally {
+            bitmap?.recycle()
         }
         return builder
     }
@@ -237,5 +249,19 @@ class IncomingClipNotifier(
             "image/tiff" -> "tiff"
             else -> "bin"
         }
+    }
+
+    private fun calculateInSampleSize(options: BitmapFactory.Options, reqWidth: Int, reqHeight: Int): Int {
+        val height = options.outHeight
+        val width = options.outWidth
+        var inSampleSize = 1
+        if (height > reqHeight || width > reqWidth) {
+            val halfHeight = height / 2
+            val halfWidth = width / 2
+            while (halfHeight / inSampleSize >= reqHeight && halfWidth / inSampleSize >= reqWidth) {
+                inSampleSize *= 2
+            }
+        }
+        return inSampleSize
     }
 }

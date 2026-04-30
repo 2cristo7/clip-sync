@@ -3,6 +3,7 @@ package com.clipsync.images
 import android.content.Context
 import android.net.Uri
 import androidx.core.content.FileProvider
+import com.clipsync.util.L
 import java.io.File
 import java.util.UUID
 
@@ -45,7 +46,26 @@ class ImageCache private constructor(
         val safeExt = ext.ifBlank { "bin" }
         val file = File(dir, "${UUID.randomUUID()}.$safeExt")
         file.outputStream().use { it.write(bytes) }
+        enforceMaxSize()
         return file
+    }
+
+    /**
+     * Evict oldest files until the cache directory is under [MAX_CACHE_SIZE_BYTES].
+     */
+    fun enforceMaxSize() {
+        val root = rootProvider()
+        if (!root.exists() || !root.isDirectory) return
+        val files = root.listFiles()?.sortedBy { it.lastModified() } ?: return
+        var totalSize = files.sumOf { it.length() }
+        var evicted = 0
+        for (file in files) {
+            if (totalSize <= MAX_CACHE_SIZE_BYTES) break
+            totalSize -= file.length()
+            file.delete()
+            evicted++
+        }
+        if (evicted > 0) L.event("ImageCache", "evicted $evicted files to stay under ${MAX_CACHE_SIZE_BYTES / 1024 / 1024}MB")
     }
 
     /**
@@ -69,5 +89,6 @@ class ImageCache private constructor(
         const val AUTHORITY = "com.clipsync.fileprovider"
         const val DIR_NAME = "clipsync"
         const val DEFAULT_MAX_AGE_MS = 24L * 60L * 60L * 1000L // 24h
+        private const val MAX_CACHE_SIZE_BYTES = 200L * 1024 * 1024 // 200MB
     }
 }
