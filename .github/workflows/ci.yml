@@ -16,6 +16,13 @@ jobs:
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_16.app
 
+      - name: Cache SPM + DerivedData
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Developer/Xcode/DerivedData
+          key: xcode-${{ runner.os }}-${{ hashFiles('mac/ClipSync.xcodeproj/project.pbxproj', 'mac/**/*.swift') }}
+          restore-keys: xcode-${{ runner.os }}-
+
       - name: Build and test
         run: |
           xcodebuild test \
