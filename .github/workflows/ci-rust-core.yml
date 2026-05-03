@@ -1,0 +1,77 @@
+name: CI Rust Core
+
+on:
+  push:
+    branches:
+      - dev
+      - 'fix/rust-**'
+      - 'feat/rust-**'
+      - 'chore/rust-**'
+      - 'test/rust-**'
+      - 'docs/rust-**'
+    paths:
+      - 'rust/**'
+      - '.github/workflows/ci-rust-core.yml'
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '**/screenshots/**'
+      - '*.png'
+  pull_request:
+    branches: [dev]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '**/screenshots/**'
+      - '*.png'
+
+concurrency:
+  group: ci-rust-core-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  check:
+    name: Check / Test / Clippy / Fmt
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rust
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libxcb-shape0-dev \
+            libxcb-xfixes0-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev
+
+      - name: Format check
+        run: cargo fmt --all -- --check
+
+      - name: Cargo check
+        run: cargo check --workspace --all-targets
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Nextest
+        run: cargo nextest run --workspace
