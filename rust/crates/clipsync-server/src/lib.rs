@@ -4,6 +4,7 @@ pub mod clipboard_watcher;
 pub mod errors;
 pub mod rate_limit;
 pub mod routes;
+pub mod startup;
 pub mod tray;
 pub mod ws_hub;
 

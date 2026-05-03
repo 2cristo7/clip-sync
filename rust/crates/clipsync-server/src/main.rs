@@ -11,6 +11,7 @@ use tokio::sync::RwLock;
 use tracing::{error, info};
 
 use clipsync_server::routes;
+use clipsync_server::startup::{try_bind, StartupError};
 use clipsync_server::ws_hub::WsHub;
 use clipsync_server::AppState;
 
@@ -115,9 +116,13 @@ async fn main() {
         .expect("Failed to build TLS server config");
     let tls_acceptor = tokio_rustls::TlsAcceptor::from(tls_config);
 
-    let listener = match tokio::net::TcpListener::bind(addr).await {
+    let listener = match try_bind(addr).await {
         Ok(l) => l,
-        Err(e) => {
+        Err(StartupError::PortInUse(port)) => {
+            error!("port {port} is already in use; another ClipSync instance may be running");
+            std::process::exit(2);
+        }
+        Err(StartupError::Io(e)) => {
             error!("Failed to bind to {addr}: {e}");
             std::process::exit(1);
         }
