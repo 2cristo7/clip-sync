@@ -15,7 +15,7 @@ curl -fsSL https://raw.githubusercontent.com/2cristo7/clip-sync/main/install.sh 
 
 Download the Android APK from the [latest release](https://github.com/2cristo7/clip-sync/releases/latest).
 
-→ Full install guide (manual DMG, APK sideload, Gatekeeper bypass): **[docs/install.md](docs/install.md)**
+→ Full install guide (manual DMG, APK sideload, Gatekeeper bypass): **[docs/quick-start.md](docs/quick-start.md)**
 
 ---
 
@@ -24,7 +24,7 @@ Download the Android APK from the [latest release](https://github.com/2cristo7/c
 - **Text, bidirectional** — copy text on the Mac and it lands in the Android clipboard instantly, and vice versa.
 - **Images from Mac to Android** — copy an image or screenshot on the Mac (⌘+Ctrl+Shift+4) and it appears in the Android clipboard, ready to paste anywhere.
 - **Screenshots, bidirectional** — take a screenshot on Android and it is sent to the Mac clipboard automatically. Take one on the Mac and it goes to Android.
-- **Share to Mac** — a "Mac" button appears in the Android share sheet. Tap it to send any file or photo directly to the Mac; it is saved in `Documents/ClipSync/` and copied to the Mac clipboard.
+- **Share to Mac** — a "Mac" button appears in the Android share sheet. Tap it to send any file or photo directly to the Mac; it is saved in `Documents/ClipSync/` and copied to the Mac clipboard. A confirmation alert appears on the Mac with an **Open in Finder** button to reveal the saved file immediately.
 
 ---
 
@@ -36,10 +36,6 @@ Download the Android APK from the [latest release](https://github.com/2cristo7/c
 - **Persistent connection** — Android foreground service with automatic reconnection
 - **Neumorphic UI** — clean dark/light Android interface
 - **Tailscale support** — works over WireGuard tunnels when away from home
-
-### In the code but not currently surfaced
-
-- **Floating FAB overlay** (`ClipOverlayManager`) — a persistent bubble that floats over any Android app and pushes the clipboard to the Mac on tap. The implementation is complete but disabled in the current UI; it can be re-enabled.
 
 ---
 
@@ -64,6 +60,10 @@ Download the Android APK from the [latest release](https://github.com/2cristo7/c
     <td align="center">
       <img src="docs/screenshots/mac-tailscale-disconnected.png" width="200" alt="Tailscale VPN off" /><br/>
       <sub>Tailscale VPN off</sub>
+    </td>
+    <td align="center">
+      <img src="docs/screenshots/mac-file-saved-alert.png" width="200" alt="File saved alert — Show in Finder" /><br/>
+      <sub>File saved alert</sub>
     </td>
   </tr>
 </table>
@@ -161,7 +161,7 @@ sequenceDiagram
 
 ## Quick start
 
-See **[docs/installation.md](docs/installation.md)** for the full guide, including code-signing setup, Shizuku (for auto clipboard read), and Tailscale.
+See **[docs/build-from-source.md](docs/build-from-source.md)** for the full guide, including code-signing setup, Shizuku (for auto clipboard read), and Tailscale.
 
 **macOS — build & run**
 
@@ -207,7 +207,7 @@ clip-sync/
 │   └── app/src/main/java/
 │       └── com/clipsync/         source code (22 Kotlin files)
 └── docs/
-    ├── installation.md           full setup guide ← start here
+    ├── build-from-source.md      full setup guide ← start here
     ├── screenshots/              UI screenshots
     ├── architecture/
     │   ├── protocol.md           wire protocol reference
@@ -248,7 +248,7 @@ It was produced by feeding the entire v0.1.0 source code to **Gemini Deep Resear
 ## Known limitations
 
 - mDNS auto-discovery does not work over Tailscale (no multicast in WireGuard). Use manual IP entry with the Mac's Tailscale IP (`100.x.x.x`).
-- Clipboard auto-send on Android requires Shizuku or an Accessibility Service (see [installation guide](docs/installation.md#4-shizuku--automatic-clipboard-reading)).
+- Clipboard auto-send on Android requires Shizuku or an Accessibility Service (see [installation guide](docs/build-from-source.md#4-shizuku--automatic-clipboard-reading)).
 - Code signing and Gatekeeper notarization are not configured for distribution.
 
 ---

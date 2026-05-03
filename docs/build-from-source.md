@@ -51,7 +51,7 @@ Both devices must be on the same Wi-Fi network for LAN use. For remote use, both
 ### 2.1 Clone the repository
 
 ```bash
-git clone https://github.com/your-username/clip-sync.git
+git clone https://github.com/2cristo7/clip-sync.git
 cd clip-sync
 ```
 
@@ -175,12 +175,10 @@ ClipSync requests several permissions on first launch:
 | Permission | Why |
 |-----------|-----|
 | `FOREGROUND_SERVICE` | Keeps the connection alive when the app is in the background |
-| `SYSTEM_ALERT_WINDOW` | Shows the floating FAB overlay over other apps |
+| `SYSTEM_ALERT_WINDOW` | Not used in the current release — reserved for future features |
 | `POST_NOTIFICATIONS` | Shows incoming clipboard notifications |
 | Battery optimisation exemption | Prevents Android from killing the foreground service |
 
-For the **floating overlay**, you must grant the "Display over other apps" permission manually:
-Settings → Apps → ClipSync → **Display over other apps** → Allow.
 
 For the **battery exemption**:
 Settings → Battery → App battery usage → ClipSync → **Unrestricted**.
@@ -195,7 +193,7 @@ Android 10+ restricts background clipboard access: an app in the background call
 
 **Shizuku** grants ClipSync a system-level user service that can read the clipboard from the background, enabling 100% automatic sync: copy anything in Chrome, WhatsApp, or any other app, and ClipSync sends it to the Mac without any manual tap.
 
-Without Shizuku, the floating FAB overlay is the fallback: tap it to manually push your clipboard.
+Without Shizuku, clipboard sync is Mac→Android only; Android→Mac requires Shizuku.
 
 ### 4.2 Install Shizuku
 
@@ -324,7 +322,7 @@ System Settings → Network → Firewall → Firewall Options → `+` → select
 Pairing links the Android app to the Mac using a one-time 6-digit code (TOFU — trust on first use).
 
 1. **On the Mac** — click the ClipSync menu bar icon → **Pair new device**.
-   A window shows a 6-digit code and a QR code (valid for 60 seconds; refreshes automatically).
+   A window shows a 6-digit code and a QR code (valid for 5 minutes).
 
 2. **On Android** — open ClipSync → **Pair**.
    Either scan the QR code or type the 6-digit code manually.
@@ -349,11 +347,11 @@ Pairing links the Android app to the Mac using a one-time 6-digit code (TOFU —
 
 ### Pairing code expires before I can enter it
 
-The code refreshes every 60 seconds. It is displayed on the Mac pairing window; wait for the next code and try again.
+The code is valid for 5 minutes. If it expires, close and reopen the Pair window to generate a new one.
 
 ### Clipboard does not sync automatically on Android
 
-- Without Shizuku: use the floating FAB to push manually.
+- Without Shizuku: clipboard sync is Mac→Android only (copy on Mac, paste on Android). Android→Mac requires Shizuku.
 - With Shizuku: verify Shizuku is running (green indicator in the Shizuku app). After a reboot, re-run the ADB start command (section 4.3 step 5).
 - Check that ClipSync has battery optimisation disabled (section 3.3).
 

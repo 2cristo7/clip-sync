@@ -4,6 +4,15 @@ Pre-built binaries for macOS and Android are attached to every [GitHub Release](
 
 ---
 
+## Requirements
+
+| Platform | Minimum version |
+|----------|----------------|
+| macOS    | 14.0 (Sonoma)  |
+| Android  | 13 (API 33)    |
+
+---
+
 ## One-liner (macOS)
 
 Open **Terminal** and run:
@@ -51,17 +60,8 @@ adb install ClipSync-x.x.x.apk
 2. **Android** — open ClipSync, tap **Pair with Mac**, scan the QR code shown on the Mac (or enter the 6-digit code manually).
 3. Both apps confirm the pairing. Clipboard sync starts immediately.
 
-For Shizuku setup (required for Android→Mac clipboard reading), see the [full installation guide](installation.md#4-shizuku--automatic-clipboard-reading).  
+For Shizuku setup (required for Android→Mac clipboard reading), see the [full installation guide](build-from-source.md#4-shizuku--automatic-clipboard-reading).  
 For Tailscale (sync outside your home network), see [guides/tailscale-setup.md](guides/tailscale-setup.md).
-
----
-
-## Requirements
-
-| Platform | Minimum version |
-|----------|----------------|
-| macOS    | 14.0 (Sonoma)  |
-| Android  | 13 (API 33)    |
 
 ---
 

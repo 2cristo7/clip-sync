@@ -4,7 +4,7 @@
 
 | Document | Description |
 |----------|-------------|
-| [installation.md](installation.md) | Full setup guide: macOS build, code signing, Android sideload, Shizuku, Tailscale, pairing |
+| [build-from-source.md](build-from-source.md) | Full setup guide: macOS build, code signing, Android sideload, Shizuku, Tailscale, pairing |
 
 ## Architecture
 

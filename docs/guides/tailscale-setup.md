@@ -18,7 +18,7 @@ Tailscale since they are transport-layer agnostic.
 | Item | Requirement |
 |------|-------------|
 | Mac  | macOS 14.0+, ClipSync built and running |
-| Android | Android 8.0+ (API 26), ClipSync installed |
+| Android | Android 13 (API 33)+, ClipSync installed |
 | Tailscale account | Free tier is sufficient |
 
 ---
@@ -78,7 +78,7 @@ devices are authorized on the tailnet.
 ### 3.1 Start ClipSync on Mac
 
 Launch ClipSync as usual. The HTTP/WebSocket server listens on
-`0.0.0.0:<port>` (default 9876), so it is reachable on all interfaces
+`0.0.0.0:<port>` (default 7010), so it is reachable on all interfaces
 including the Tailscale `utun` interface.
 
 ### 3.2 Connect from Android -- Manual IP mode
@@ -86,7 +86,7 @@ including the Tailscale `utun` interface.
 1. Open ClipSync on Android.
 2. Go to **Settings**.
 3. Switch discovery mode to **Manual**.
-4. Enter the Mac's Tailscale IP (e.g. `100.64.0.2`) and port (`9876`).
+4. Enter the Mac's Tailscale IP (e.g. `100.64.0.2`) and port (`7010`).
 5. Tap **Pair** and enter the 6-digit pairing code displayed on the Mac.
 
 Pairing will complete over TLS. The SPKI fingerprint is pinned on first
@@ -151,8 +151,8 @@ Less common, but if active:
 # Check if pf is enabled
 sudo pfctl -s info | head -5
 
-# If rules block port 9876, add an allow rule:
-echo "pass in proto tcp from any to any port 9876" | sudo pfctl -a clipsync -f -
+# If rules block port 7010, add an allow rule:
+echo "pass in proto tcp from any to any port 7010" | sudo pfctl -a clipsync -f -
 ```
 
 ### `tailscale ping` fails
@@ -161,7 +161,7 @@ echo "pass in proto tcp from any to any port 9876" | sudo pfctl -a clipsync -f -
 - Check the Tailscale admin console (<https://login.tailscale.com/admin/machines>)
   and ensure both devices are **authorized** (not expired / pending).
 - If using an ACL policy, ensure it allows traffic between the two
-  devices on the ClipSync port (default 9876).
+  devices on the ClipSync port (default 7010).
 - Try `tailscale netcheck` on both devices to diagnose DERP/relay
   connectivity.
 
@@ -225,5 +225,5 @@ echo "pass in proto tcp from any to any port 9876" | sudo pfctl -a clipsync -f -
    when not needed.
 
 5. **Tailscale ACLs.** If your tailnet uses Access Control Lists, ensure
-   port 9876 (or your configured ClipSync port) is allowed between the
+   port 7010 (or your configured ClipSync port) is allowed between the
    Mac and Android devices.
