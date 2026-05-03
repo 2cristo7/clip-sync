@@ -12,11 +12,6 @@ on:
     paths:
       - 'rust/**'
       - '.github/workflows/ci-rust-core.yml'
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - '**/screenshots/**'
-      - '*.png'
   pull_request:
     branches: [dev]
     paths-ignore:
