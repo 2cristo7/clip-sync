@@ -83,7 +83,7 @@ class PairingApi(
             .callTimeout(3, TimeUnit.SECONDS)
             .connectTimeout(3, TimeUnit.SECONDS)
             .build()
-        val req = Request.Builder().url("https://$host:$port/ping").head().build()
+        val req = Request.Builder().url("https://$host:$port/health").get().build()
         client.newCall(req).execute().use { true }
     }
 
