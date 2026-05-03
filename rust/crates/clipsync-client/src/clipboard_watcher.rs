@@ -111,8 +111,8 @@ mod tests {
 
     #[test]
     fn echo_buffer_size_is_reasonable() {
-        assert!(ECHO_BUFFER_SIZE >= 8);
-        assert!(ECHO_BUFFER_SIZE <= 128);
+        const { assert!(ECHO_BUFFER_SIZE >= 8) };
+        const { assert!(ECHO_BUFFER_SIZE <= 128) };
     }
 
     #[test]

@@ -1,5 +1,4 @@
 use std::net::IpAddr;
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use axum::body::Body;
@@ -103,7 +102,7 @@ async fn pair_accepts_valid_code() {
     let app = build_router(state);
 
     let req = Request::builder()
-        .uri(&format!("/pair?code={code}"))
+        .uri(format!("/pair?code={code}"))
         .header("X-ClipSync-Device", "test-device")
         .body(Body::empty())
         .unwrap();
@@ -131,7 +130,7 @@ async fn pair_code_consumed_after_use() {
     // First use — succeeds
     let app = build_router(state.clone());
     let req = Request::builder()
-        .uri(&format!("/pair?code={code}"))
+        .uri(format!("/pair?code={code}"))
         .header("X-ClipSync-Device", "test-device")
         .body(Body::empty())
         .unwrap();
@@ -141,7 +140,7 @@ async fn pair_code_consumed_after_use() {
     // Second use — fails (code consumed)
     let app = build_router(state);
     let req = Request::builder()
-        .uri(&format!("/pair?code={code}"))
+        .uri(format!("/pair?code={code}"))
         .header("X-ClipSync-Device", "test-device")
         .body(Body::empty())
         .unwrap();
