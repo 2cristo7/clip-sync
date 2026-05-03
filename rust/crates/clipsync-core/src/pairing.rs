@@ -11,14 +11,45 @@ use crate::config::PAIRING_CODE_TTL_SECS;
 
 type HmacSha256 = Hmac<Sha256>;
 
-#[derive(Debug, Error)]
+/// Errors returned by the pairing state machine.
+///
+/// The variants here mirror the Mac (Swift) `PairingError` taxonomy
+/// (`mac-legacy/ClipSync/Pairing/PairingManager.swift`). The wire codes
+/// returned by [`PairingError::code`] are camelCase to match the Mac
+/// vocabulary so cross-platform clients can parse responses identically.
+///
+/// See `docs/plans/master-plan-rust-fork.md` Phase 1.5 for the rationale.
+#[derive(Debug, Error, PartialEq, Eq)]
 pub enum PairingError {
-    #[error("pairing code expired")]
-    CodeExpired,
+    /// The supplied code does not match the active code.
     #[error("invalid pairing code")]
     InvalidCode,
+    /// The active code's TTL has elapsed.
+    #[error("pairing code expired")]
+    CodeExpired,
+    /// The active code has already been used in a successful pairing.
+    #[error("pairing code already consumed")]
+    ConsumedCode,
+    /// No pairing code has been started (or the previous one was cleared).
     #[error("no active pairing code")]
     NoActiveCode,
+}
+
+impl PairingError {
+    /// Stable machine-readable code used as the `error` field in 401 bodies.
+    ///
+    /// These values match the Mac `PairingError` Swift case names
+    /// (`invalid`, `expired`, `consumed`, `notStarted`) so that the
+    /// Android/Tauri clients can decode the same vocabulary regardless of
+    /// which server implementation they talk to.
+    pub fn code(&self) -> &'static str {
+        match self {
+            Self::InvalidCode => "invalid",
+            Self::CodeExpired => "expired",
+            Self::ConsumedCode => "consumed",
+            Self::NoActiveCode => "notStarted",
+        }
+    }
 }
 
 /// A time-limited 6-digit pairing code.
@@ -26,6 +57,7 @@ pub struct PairingCode {
     pub code: String,
     created_at: Instant,
     ttl: Duration,
+    consumed: bool,
 }
 
 impl PairingCode {
@@ -37,18 +69,31 @@ impl PairingCode {
             code: format!("{:06}", code),
             created_at: Instant::now(),
             ttl: Duration::from_secs(PAIRING_CODE_TTL_SECS),
+            consumed: false,
         }
     }
 
-    /// Check if this code is still valid.
+    /// True when the code has not yet expired (TTL-wise).
     pub fn is_valid(&self) -> bool {
         self.created_at.elapsed() < self.ttl
     }
 
+    /// True when the code has already been used in a successful pairing.
+    pub fn is_consumed(&self) -> bool {
+        self.consumed
+    }
+
     /// Validate the given code string against this pairing code.
+    ///
+    /// Order of checks mirrors the Mac (Swift) `PairingManager.consume`:
+    /// expired → consumed → mismatch. This keeps the wire vocabulary
+    /// stable between the two server implementations.
     pub fn validate(&self, candidate: &str) -> Result<(), PairingError> {
         if !self.is_valid() {
             return Err(PairingError::CodeExpired);
+        }
+        if self.consumed {
+            return Err(PairingError::ConsumedCode);
         }
         if candidate != self.code {
             return Err(PairingError::InvalidCode);
@@ -114,19 +159,49 @@ impl PairingManager {
     }
 
     /// Validate an incoming code and consume it on success.
+    ///
+    /// Returns the precise [`PairingError`] variant matching the Mac state
+    /// machine so the HTTP layer can report `notStarted | expired |
+    /// consumed | invalid` to the client. On success the code is marked
+    /// consumed (kept in memory) so a subsequent attempt with the same
+    /// code reports `consumed` rather than `notStarted`.
     pub fn validate_and_consume(&mut self, code: &str) -> Result<(), PairingError> {
         let active = self
             .active_code
-            .as_ref()
+            .as_mut()
             .ok_or(PairingError::NoActiveCode)?;
         active.validate(code)?;
-        self.active_code = None; // consume on success
+        active.consumed = true;
         Ok(())
     }
 
-    /// Check if there's an active (non-expired) code.
+    /// Check if there's an active (non-expired, non-consumed) code.
     pub fn has_active_code(&self) -> bool {
-        self.active_code.as_ref().is_some_and(|c| c.is_valid())
+        self.active_code
+            .as_ref()
+            .is_some_and(|c| c.is_valid() && !c.is_consumed())
+    }
+
+    /// Test-only helper: force the active code into an expired state
+    /// without waiting for the real TTL.
+    ///
+    /// This mutates `created_at` to `(now - 2 * ttl)` so subsequent
+    /// `is_valid()` checks return false. Used by integration tests in
+    /// `clipsync-server` to exercise the `CodeExpired` branch.
+    ///
+    /// Behind `cfg(any(test, feature = "test-support"))` so production
+    /// binaries cannot accidentally call it. Currently exposed only via
+    /// `cfg(test)` cross-crate by re-export through the
+    /// `test-support` feature.
+    #[doc(hidden)]
+    pub fn pre_expire_for_tests(&mut self) {
+        if let Some(code) = self.active_code.as_mut() {
+            // Move `created_at` far enough back that `is_valid()` is
+            // false regardless of the configured TTL.
+            code.created_at = Instant::now()
+                .checked_sub(code.ttl * 2)
+                .unwrap_or_else(Instant::now);
+        }
     }
 }
 
@@ -216,15 +291,40 @@ mod tests {
         let mut mgr = PairingManager::new();
         assert!(!mgr.has_active_code());
 
+        // No code yet -> NoActiveCode
+        assert_eq!(
+            mgr.validate_and_consume("000000"),
+            Err(PairingError::NoActiveCode)
+        );
+
         let code = mgr.generate_code().to_string();
         assert!(mgr.has_active_code());
 
-        // Wrong code fails
+        // Wrong code -> InvalidCode
         let wrong = if code == "000000" { "111111" } else { "000000" };
-        assert!(mgr.validate_and_consume(wrong).is_err());
+        assert_eq!(
+            mgr.validate_and_consume(wrong),
+            Err(PairingError::InvalidCode)
+        );
 
         // Correct code succeeds and consumes
         assert!(mgr.validate_and_consume(&code).is_ok());
+        // After consumption the code is no longer "active"
         assert!(!mgr.has_active_code());
+        // Re-using the same code now reports `consumed`, not `notStarted`
+        assert_eq!(
+            mgr.validate_and_consume(&code),
+            Err(PairingError::ConsumedCode)
+        );
+    }
+
+    #[test]
+    fn error_codes_match_mac_vocabulary() {
+        // Wire vocabulary must match Mac PairingError case names so
+        // Android/Tauri clients can decode the same body shape.
+        assert_eq!(PairingError::InvalidCode.code(), "invalid");
+        assert_eq!(PairingError::CodeExpired.code(), "expired");
+        assert_eq!(PairingError::ConsumedCode.code(), "consumed");
+        assert_eq!(PairingError::NoActiveCode.code(), "notStarted");
     }
 }
