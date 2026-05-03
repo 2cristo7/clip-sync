@@ -6,6 +6,19 @@
 
 ---
 
+## Install
+
+```bash
+# macOS — one-liner
+curl -fsSL https://raw.githubusercontent.com/2cristo7/clip-sync/main/install.sh | bash
+```
+
+Download the Android APK from the [latest release](https://github.com/2cristo7/clip-sync/releases/latest).
+
+→ Full install guide (manual DMG, APK sideload, Gatekeeper bypass): **[docs/install.md](docs/install.md)**
+
+---
+
 ## What it does
 
 - **Text, bidirectional** — copy text on the Mac and it lands in the Android clipboard instantly, and vice versa.
