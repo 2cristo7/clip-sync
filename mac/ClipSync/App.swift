@@ -164,7 +164,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func startAdvertising() {
         let name = Self.deviceName()
         var txt: [String: String] = [
-            "version": "0.1.0",
+            "version": "0.1.1",
             "name": name,
         ]
         if !tlsManager.spkiFingerprint.isEmpty {

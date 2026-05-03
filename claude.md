@@ -124,18 +124,22 @@ The master agent:
 Open `mac/ClipSync.xcodeproj` in Xcode and press **⌘R**. This builds a Debug arm64 binary with full Xcode signing. Logs appear in the Xcode console.
 
 ## Build for installation
-Run from the repo root:
+Run from `mac/`:
 ```bash
-cd mac && rm -rf build && xcodebuild build \
+rm -rf build && xcodebuild build \
   -project ClipSync.xcodeproj \
   -scheme ClipSync \
   -configuration Release \
   -derivedDataPath build/DerivedData \
+  ARCHS=arm64 \
+  ONLY_ACTIVE_ARCH=YES \
   CODE_SIGN_IDENTITY="-" \
   CODE_SIGNING_REQUIRED=YES \
   CODE_SIGNING_ALLOWED=YES \
   -quiet
 ```
+
+> **`ARCHS=arm64 ONLY_ACTIVE_ARCH=YES` is required.** Universal builds fail in `swift-distributed-tracing` (transitive Hummingbird dep) when compiling x86_64 with Xcode 26 / Swift 6 toolchain. Apple Silicon-only is fine for the menu-bar app target.
 
 ## Install to /Applications
 ```bash
@@ -144,6 +148,33 @@ cp -R mac/build/DerivedData/Build/Products/Release/ClipSync.app /Applications/Cl
 ```
 
 > **Important:** always use `rm -rf` before `cp -R` — a plain `cp` over an existing `.app` produces a broken merge. The installed binary must show `flags=adhoc,runtime` (not `linker-signed`) when checked with `codesign -dvvv /Applications/ClipSync.app`.
+
+## Build distributable .dmg
+After the Release build above, from `mac/`:
+```bash
+APP="build/DerivedData/Build/Products/Release/ClipSync.app" && \
+DMG_DIR=$(mktemp -d) && \
+cp -R "$APP" "$DMG_DIR/" && \
+ln -s /Applications "$DMG_DIR/Applications" && \
+hdiutil create -volname "ClipSync" -srcfolder "$DMG_DIR" -ov -format UDZO ClipSync.dmg && \
+rm -rf "$DMG_DIR"
+```
+
+Produces `mac/ClipSync.dmg` with the app + a symlink to `/Applications`. Drag-to-install. No Gatekeeper prompt locally because dmgs created with `hdiutil` carry no `com.apple.quarantine` xattr; downloading the same dmg from the web triggers Gatekeeper because ad-hoc signing is not Developer ID.
+
+## Full reset for fresh-install testing
+Quit ClipSync (menu bar → Quit), then:
+```bash
+rm -rf /Applications/ClipSync.app
+rm -rf ~/Library/Developer/Xcode/DerivedData/ClipSync-*
+while security delete-generic-password -s com.clipsync.tls-identity 2>/dev/null; do :; done
+security delete-generic-password -s com.clipsync.token-store 2>/dev/null
+security delete-generic-password -s com.clipsync.pairing-secret 2>/dev/null
+defaults delete dev.clipsync.ClipSync 2>/dev/null
+/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister -f -r -domain local -domain system -domain user
+```
+
+> `tls-identity` stores **two** keychain items (cert + private key) under the same service name, so `delete-generic-password` must be looped until it returns non-zero. The `lsregister` re-index makes Spotlight forget orphaned ClipSync entries from `DerivedData`.
 
 ---
 

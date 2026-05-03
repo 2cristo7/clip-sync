@@ -1,0 +1,20 @@
+I got a Mac. I use Android. No AirDrop, no shared clipboard like on Windows — two ecosystems that simply don't talk to each other.
+
+I tried the alternatives. KDE Connect, Clipt, a couple of paid apps. They all had something I didn't like: too much reliance on external servers, abandonware-looking interfaces, or features that promised more than they delivered.
+
+So I built ClipSync.
+
+What it does:
+→ Bidirectional text sync — copy on Mac, paste on Android. Copy on Android, paste on Mac. Instantly, over LAN or Tailscale
+→ Bidirectional screenshots — take a screenshot on either device and it lands in the other's clipboard automatically
+→ Images from Mac to Android — ⌘+Ctrl+Shift+4 on Mac and the image is already in your Android clipboard
+→ Share Sheet integration — a "Mac" button in the Android share sheet; tap it to send any file or photo directly to the Mac, saved in Documents/ClipSync/ and copied to the clipboard
+→ Secure local pairing — self-signed TLS with SPKI fingerprint pinning + HMAC-SHA256 on every request; no third-party server ever touches the data
+→ Auto-discovery on LAN via mDNS/Bonjour; manual IP for Tailscale when away from home
+→ Automatic reconnection when the network changes, no intervention needed
+
+Swift on Mac (menu bar app), Kotlin on Android. Custom protocol over WebSocket, zero external dependencies in the data path.
+
+Personal project. I use it every day. It's what happens when a tool doesn't exist and you need it to.
+
+Coming soon: a cross-platform version to connect Mac, Linux, and Windows to each other — because the problem isn't just Android and Mac.

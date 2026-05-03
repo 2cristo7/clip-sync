@@ -142,7 +142,7 @@ final class ClipServer {
         Task { await hub.stop() }
     }
 
-    private static let version = "0.1.0"
+    private static let version = "0.1.1"
     private static let platform = "macos"
 
     static func makeRouter(hub: WebSocketHub,

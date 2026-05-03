@@ -102,17 +102,21 @@ final class PasteboardInjector: @unchecked Sendable {
             throw PasteboardInjectionError.writeFailed
         }
         logger.info("File saved to Documents/ClipSync: \(destURL.lastPathComponent)")
-        showFileSavedNotification(name: destURL.lastPathComponent)
+        showFileSavedNotification(fileURL: destURL)
     }
 
-    private func showFileSavedNotification(name: String) {
+    private func showFileSavedNotification(fileURL: URL) {
         DispatchQueue.main.async {
             let alert = NSAlert()
             alert.messageText = "ClipSync"
-            alert.informativeText = "File saved to Documents/ClipSync: \(name)"
+            alert.informativeText = "File saved to Documents/ClipSync: \(fileURL.lastPathComponent)"
             alert.alertStyle = .informational
             alert.addButton(withTitle: "OK")
-            alert.runModal()
+            alert.addButton(withTitle: "Show in Finder")
+            let response = alert.runModal()
+            if response == .alertSecondButtonReturn {
+                NSWorkspace.shared.activateFileViewerSelecting([fileURL])
+            }
         }
     }
 

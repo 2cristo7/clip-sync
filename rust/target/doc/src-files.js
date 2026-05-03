@@ -1,0 +1,2 @@
+createSrcSidebar('[["muda",["",[["builders",[],["check.rs","icon.rs","mod.rs","normal.rs","submenu.rs"]],["items",[],["check.rs","icon.rs","mod.rs","normal.rs","predefined.rs","submenu.rs"]],["platform_impl",[["macos",[],["accelerator.rs","icon.rs","mod.rs","util.rs"]]],["mod.rs"]]],["about_metadata.rs","accelerator.rs","error.rs","icon.rs","lib.rs","menu.rs","menu_id.rs","util.rs"]]]]');
+//{"start":19,"fragment_lengths":[368]}
