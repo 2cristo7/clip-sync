@@ -57,12 +57,11 @@ pub async fn auth_layer(
         // For now, HMAC verification is deferred to the handler or done via a body extractor.
         // This is a known limitation — full HMAC verification requires body buffering.
         let (parts, body) = req.into_parts();
-        let body_bytes = match axum::body::to_bytes(body, clipsync_core::config::MAX_PAYLOAD_BYTES)
-            .await
-        {
-            Ok(b) => b,
-            Err(_) => return unauthorized(),
-        };
+        let body_bytes =
+            match axum::body::to_bytes(body, clipsync_core::config::MAX_PAYLOAD_BYTES).await {
+                Ok(b) => b,
+                Err(_) => return unauthorized(),
+            };
 
         // Look up the secret for this token
         // For now use a default pairing secret — in production this would be

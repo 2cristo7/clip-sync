@@ -30,8 +30,8 @@ fn pair_response_structure() {
     let golden = include_str!("../../../tests/golden/pair_response.json");
     let resp: clipsync_core::pairing::PairResponse = serde_json::from_str(golden).unwrap();
 
-    use base64::Engine;
     use base64::engine::general_purpose::STANDARD as BASE64;
+    use base64::Engine;
 
     // All fields must decode as valid base64
     let token_bytes = BASE64.decode(&resp.token).unwrap();
@@ -42,7 +42,11 @@ fn pair_response_structure() {
 
     // Sig is HMAC-SHA256 output = always 32 bytes
     let sig_bytes = BASE64.decode(&resp.sig).unwrap();
-    assert_eq!(sig_bytes.len(), 32, "Signature must be 32 bytes (HMAC-SHA256)");
+    assert_eq!(
+        sig_bytes.len(),
+        32,
+        "Signature must be 32 bytes (HMAC-SHA256)"
+    );
 }
 
 /// Verify ClipType serialization matches wire format exactly.
@@ -57,7 +61,11 @@ fn clip_type_wire_format() {
 
     for (clip_type, expected) in types {
         let json = serde_json::to_string(&clip_type).unwrap();
-        assert_eq!(json, expected, "ClipType::{:?} must serialize to {}", clip_type, expected);
+        assert_eq!(
+            json, expected,
+            "ClipType::{:?} must serialize to {}",
+            clip_type, expected
+        );
     }
 }
 
@@ -70,7 +78,10 @@ fn timestamp_is_unix_seconds() {
     // 1714000000 is approximately April 2024 in Unix seconds
     // If it were milliseconds, it would be year ~56000
     assert!(payload.ts > 1_000_000_000, "ts should be in Unix seconds");
-    assert!(payload.ts < 2_000_000_000, "ts should be in Unix seconds, not milliseconds");
+    assert!(
+        payload.ts < 2_000_000_000,
+        "ts should be in Unix seconds, not milliseconds"
+    );
 }
 
 /// Verify data field uses standard base64 (not base64url).
@@ -88,8 +99,8 @@ fn data_uses_standard_base64() {
     );
 
     // Should decode successfully with standard base64
-    use base64::Engine;
     use base64::engine::general_purpose::STANDARD as BASE64;
+    use base64::Engine;
     assert!(BASE64.decode(&payload.data).is_ok());
 }
 
@@ -100,8 +111,14 @@ fn fingerprint_format() {
     let fp = clipsync_core::fingerprint::spki_sha256(&identity.cert_der).unwrap();
 
     // Must be base64url (no + or /) and no padding (no =)
-    assert!(!fp.contains('+'), "fingerprint must use base64url, not standard base64");
-    assert!(!fp.contains('/'), "fingerprint must use base64url, not standard base64");
+    assert!(
+        !fp.contains('+'),
+        "fingerprint must use base64url, not standard base64"
+    );
+    assert!(
+        !fp.contains('/'),
+        "fingerprint must use base64url, not standard base64"
+    );
     assert!(!fp.contains('='), "fingerprint must not have padding");
 
     // SHA-256 = 32 bytes → 43 base64url chars without padding

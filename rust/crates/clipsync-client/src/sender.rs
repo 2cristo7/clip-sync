@@ -1,7 +1,7 @@
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
+use base64::Engine;
 use reqwest::Client;
 use tracing::{info, warn};
 

@@ -2,8 +2,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use muda::{Menu, MenuEvent, MenuItem, PredefinedMenuItem};
-use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
 use tracing::info;
+use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
 
 use clipsync_core::config::VERSION;
 

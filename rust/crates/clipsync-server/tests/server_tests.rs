@@ -9,8 +9,8 @@ use tower::ServiceExt;
 use clipsync_core::config::VERSION;
 use clipsync_core::hmac;
 use clipsync_core::pairing::PairingManager;
-use clipsync_core::token_store::TokenStore;
 use clipsync_core::tls::TlsIdentity;
+use clipsync_core::token_store::TokenStore;
 use tokio::sync::RwLock;
 
 use clipsync_server::routes::build_router;
@@ -305,7 +305,11 @@ async fn ws_accepts_valid_bearer() {
     // In test mode without a real HTTP connection, 101 is expected but some
     // versions return 200 or require a real TCP connection for the upgrade.
     // We just verify it's NOT 401 (auth passed).
-    assert_ne!(resp.status(), StatusCode::UNAUTHORIZED, "Auth should pass for valid Bearer token");
+    assert_ne!(
+        resp.status(),
+        StatusCode::UNAUTHORIZED,
+        "Auth should pass for valid Bearer token"
+    );
 }
 
 // ─── WsHub unit tests ───────────────────────────────────────────

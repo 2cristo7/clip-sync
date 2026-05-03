@@ -1,7 +1,7 @@
 use std::time::{Duration, Instant};
 
-use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
+use base64::Engine;
 use hmac::{Hmac, Mac};
 use rand::Rng;
 use sha2::Sha256;
@@ -85,8 +85,7 @@ pub fn create_pair_response(signing_secret: &[u8]) -> PairResponse {
     let secret_b64 = BASE64.encode(secret_bytes);
 
     // Sign the token with the server's pairing secret
-    let mut mac = HmacSha256::new_from_slice(signing_secret)
-        .expect("HMAC accepts any key length");
+    let mut mac = HmacSha256::new_from_slice(signing_secret).expect("HMAC accepts any key length");
     mac.update(token_bytes.as_ref());
     let sig = mac.finalize();
     let sig_b64 = BASE64.encode(sig.into_bytes());
@@ -116,7 +115,10 @@ impl PairingManager {
 
     /// Validate an incoming code and consume it on success.
     pub fn validate_and_consume(&mut self, code: &str) -> Result<(), PairingError> {
-        let active = self.active_code.as_ref().ok_or(PairingError::NoActiveCode)?;
+        let active = self
+            .active_code
+            .as_ref()
+            .ok_or(PairingError::NoActiveCode)?;
         active.validate(code)?;
         self.active_code = None; // consume on success
         Ok(())

@@ -5,13 +5,13 @@ use std::sync::Arc;
 use clap::Parser;
 use clipsync_core::config::{PORT, VERSION};
 use clipsync_core::pairing::PairingManager;
-use clipsync_core::token_store::TokenStore;
 use clipsync_core::tls::{TlsIdentity, TlsPaths};
+use clipsync_core::token_store::TokenStore;
 use tokio::sync::RwLock;
-use tracing::{info, error};
+use tracing::{error, info};
 
-use clipsync_server::ws_hub::WsHub;
 use clipsync_server::routes;
+use clipsync_server::ws_hub::WsHub;
 use clipsync_server::AppState;
 
 /// ClipSync server — real-time clipboard synchronization over LAN/Tailscale
@@ -149,11 +149,10 @@ async fn main() {
             let io = hyper_util::rt::TokioIo::new(tls_stream);
             let service = hyper_util::service::TowerToHyperService::new(app);
 
-            if let Err(e) = hyper_util::server::conn::auto::Builder::new(
-                hyper_util::rt::TokioExecutor::new(),
-            )
-            .serve_connection(io, service)
-            .await
+            if let Err(e) =
+                hyper_util::server::conn::auto::Builder::new(hyper_util::rt::TokioExecutor::new())
+                    .serve_connection(io, service)
+                    .await
             {
                 tracing::debug!("Connection error from {peer_addr}: {e}");
             }

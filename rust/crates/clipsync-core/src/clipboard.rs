@@ -1,8 +1,8 @@
 use std::sync::{Arc, Mutex};
 
 use crate::protocol::{ClipPayload, ClipType};
-use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
+use base64::Engine;
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
@@ -68,17 +68,13 @@ impl SystemClipboard {
     /// On macOS, handles TIFF→PNG conversion since macOS clipboard often stores TIFF.
     /// On Linux/Wayland, falls back to wl-paste if arboard fails.
     fn read_image_bytes(&self) -> Result<Option<Vec<u8>>, ClipboardError> {
-        let mut clipboard = arboard::Clipboard::new()
-            .map_err(|e| ClipboardError::AccessFailed(e.to_string()))?;
+        let mut clipboard =
+            arboard::Clipboard::new().map_err(|e| ClipboardError::AccessFailed(e.to_string()))?;
 
         match clipboard.get_image() {
             Ok(img) => {
                 // arboard gives us RGBA pixels; encode as PNG for wire format
-                let png_bytes = encode_rgba_as_png(
-                    &img.bytes,
-                    img.width as u32,
-                    img.height as u32,
-                );
+                let png_bytes = encode_rgba_as_png(&img.bytes, img.width as u32, img.height as u32);
                 Ok(Some(png_bytes))
             }
             Err(_) => {
@@ -132,8 +128,8 @@ impl SystemClipboard {
     /// Write an image to the clipboard from PNG bytes.
     /// On Linux/Wayland, falls back to wl-copy if arboard fails.
     fn write_image_to_clipboard(&self, png_bytes: &[u8]) -> Result<(), ClipboardError> {
-        let (width, height, rgba) = decode_png_to_rgba(png_bytes)
-            .map_err(ClipboardError::ImageConversion)?;
+        let (width, height, rgba) =
+            decode_png_to_rgba(png_bytes).map_err(ClipboardError::ImageConversion)?;
 
         let img_data = arboard::ImageData {
             width: width as usize,
@@ -141,8 +137,8 @@ impl SystemClipboard {
             bytes: std::borrow::Cow::Owned(rgba),
         };
 
-        let mut clipboard = arboard::Clipboard::new()
-            .map_err(|e| ClipboardError::AccessFailed(e.to_string()))?;
+        let mut clipboard =
+            arboard::Clipboard::new().map_err(|e| ClipboardError::AccessFailed(e.to_string()))?;
 
         match clipboard.set_image(img_data) {
             Ok(()) => Ok(()),
@@ -170,11 +166,13 @@ impl SystemClipboard {
                 .map_err(|e| ClipboardError::AccessFailed(format!("wl-copy spawn: {e}")))?;
 
             if let Some(ref mut stdin) = child.stdin {
-                stdin.write_all(png_bytes)
+                stdin
+                    .write_all(png_bytes)
                     .map_err(|e| ClipboardError::AccessFailed(format!("wl-copy write: {e}")))?;
             }
 
-            let status = child.wait()
+            let status = child
+                .wait()
                 .map_err(|e| ClipboardError::AccessFailed(format!("wl-copy wait: {e}")))?;
             if status.success() {
                 return Ok(());
@@ -210,8 +208,8 @@ impl Default for SystemClipboard {
 
 impl ClipboardProvider for SystemClipboard {
     fn read(&self) -> Result<Option<ClipPayload>, ClipboardError> {
-        let mut clipboard = arboard::Clipboard::new()
-            .map_err(|e| ClipboardError::AccessFailed(e.to_string()))?;
+        let mut clipboard =
+            arboard::Clipboard::new().map_err(|e| ClipboardError::AccessFailed(e.to_string()))?;
 
         // Try text first
         if let Ok(text) = clipboard.get_text() {
@@ -272,7 +270,8 @@ impl ClipboardProvider for SystemClipboard {
     fn write(&self, payload: &ClipPayload) -> Result<(), ClipboardError> {
         match payload.clip_type {
             ClipType::Text => {
-                let raw = BASE64.decode(&payload.data)
+                let raw = BASE64
+                    .decode(&payload.data)
                     .map_err(|e| ClipboardError::AccessFailed(e.to_string()))?;
                 let text = String::from_utf8(raw)
                     .map_err(|e| ClipboardError::AccessFailed(e.to_string()))?;
@@ -282,11 +281,13 @@ impl ClipboardProvider for SystemClipboard {
 
                 let mut clipboard = arboard::Clipboard::new()
                     .map_err(|e| ClipboardError::AccessFailed(e.to_string()))?;
-                clipboard.set_text(&text)
+                clipboard
+                    .set_text(&text)
                     .map_err(|e| ClipboardError::AccessFailed(e.to_string()))?;
             }
             ClipType::Image => {
-                let png_bytes = BASE64.decode(&payload.data)
+                let png_bytes = BASE64
+                    .decode(&payload.data)
                     .map_err(|e| ClipboardError::AccessFailed(e.to_string()))?;
 
                 let digest = Self::data_digest(&png_bytes);
@@ -297,7 +298,8 @@ impl ClipboardProvider for SystemClipboard {
             ClipType::File => {
                 // Files are saved to disk, not written to clipboard.
                 // Save the file to ~/Downloads/ and optionally set file path on clipboard.
-                let raw = BASE64.decode(&payload.data)
+                let raw = BASE64
+                    .decode(&payload.data)
                     .map_err(|e| ClipboardError::AccessFailed(e.to_string()))?;
                 let filename = payload.name.as_deref().unwrap_or("clipsync_file");
                 save_received_file(filename, &raw)?;
@@ -309,7 +311,8 @@ impl ClipboardProvider for SystemClipboard {
 
                 let mut clipboard = arboard::Clipboard::new()
                     .map_err(|e| ClipboardError::AccessFailed(e.to_string()))?;
-                clipboard.set_text(dest.to_string_lossy())
+                clipboard
+                    .set_text(dest.to_string_lossy())
                     .map_err(|e| ClipboardError::AccessFailed(e.to_string()))?;
             }
         }
@@ -438,8 +441,8 @@ fn file_payload_from_path(path: &std::path::Path) -> Result<Option<ClipPayload>,
         return Ok(None);
     }
 
-    let bytes = std::fs::read(path)
-        .map_err(|e| ClipboardError::AccessFailed(format!("file read: {e}")))?;
+    let bytes =
+        std::fs::read(path).map_err(|e| ClipboardError::AccessFailed(format!("file read: {e}")))?;
 
     let filename = path
         .file_name()
@@ -493,10 +496,7 @@ fn url_decode(s: &str) -> String {
             let hi = chars.next().unwrap_or(b'0');
             let lo = chars.next().unwrap_or(b'0');
             let hex = [hi, lo];
-            if let Ok(val) = u8::from_str_radix(
-                &String::from_utf8_lossy(&hex),
-                16,
-            ) {
+            if let Ok(val) = u8::from_str_radix(&String::from_utf8_lossy(&hex), 16) {
                 result.push(val as char);
             }
         } else {
@@ -515,7 +515,10 @@ fn received_file_path(filename: &str) -> std::path::PathBuf {
 
 /// Save a received file to ~/Downloads/.
 /// If a file with the same name exists, appends a counter.
-pub fn save_received_file(filename: &str, data: &[u8]) -> Result<std::path::PathBuf, ClipboardError> {
+pub fn save_received_file(
+    filename: &str,
+    data: &[u8],
+) -> Result<std::path::PathBuf, ClipboardError> {
     let downloads = dirs::download_dir()
         .unwrap_or_else(|| dirs::home_dir().unwrap_or_default().join("Downloads"));
 
@@ -571,7 +574,9 @@ fn encode_rgba_as_png(rgba: &[u8], width: u32, height: u32) -> Vec<u8> {
         encoder.set_color(png::ColorType::Rgba);
         encoder.set_depth(png::BitDepth::Eight);
         let mut writer = encoder.write_header().expect("PNG header write failed");
-        writer.write_image_data(rgba).expect("PNG data write failed");
+        writer
+            .write_image_data(rgba)
+            .expect("PNG data write failed");
     }
     buf
 }
@@ -845,8 +850,7 @@ mod tests {
     fn encode_decode_png_roundtrip() {
         // 2x2 red RGBA image
         let rgba: Vec<u8> = vec![
-            255, 0, 0, 255, 0, 255, 0, 255,
-            0, 0, 255, 255, 255, 255, 255, 255,
+            255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255,
         ];
         let png_bytes = encode_rgba_as_png(&rgba, 2, 2);
         assert!(!png_bytes.is_empty());

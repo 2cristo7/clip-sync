@@ -60,7 +60,10 @@ fn file_payload_with_name() {
 fn null_name_preserved() {
     let payload = ClipPayload::text("test", 0);
     let json = serde_json::to_string(&payload).unwrap();
-    assert!(json.contains(r#""name":null"#), "name:null must be explicit in JSON, not omitted");
+    assert!(
+        json.contains(r#""name":null"#),
+        "name:null must be explicit in JSON, not omitted"
+    );
 }
 
 /// Test digest consistency across different payloads with same data.

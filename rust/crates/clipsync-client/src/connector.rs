@@ -158,7 +158,8 @@ async fn connect_and_listen<C: ClipboardProvider>(
                             );
                             // Show desktop notification for non-text content
                             if payload.clip_type != clipsync_core::protocol::ClipType::Text {
-                                if let Err(e) = clipsync_core::clipboard::notify_received(&payload) {
+                                if let Err(e) = clipsync_core::clipboard::notify_received(&payload)
+                                {
                                     warn!("notification failed: {}", e);
                                 }
                             }
@@ -188,7 +189,9 @@ async fn connect_and_listen<C: ClipboardProvider>(
 }
 
 /// Build a rustls ClientConfig pinned to the server's certificate fingerprint.
-fn build_pinned_tls_config(creds: &ClientCredentials) -> Result<rustls::ClientConfig, ConnectorError> {
+fn build_pinned_tls_config(
+    creds: &ClientCredentials,
+) -> Result<rustls::ClientConfig, ConnectorError> {
     let config = rustls::ClientConfig::builder()
         .dangerous()
         .with_custom_certificate_verifier(Arc::new(FingerprintVerifier {
@@ -214,8 +217,8 @@ impl rustls::client::danger::ServerCertVerifier for FingerprintVerifier {
         _ocsp_response: &[u8],
         _now: rustls::pki_types::UnixTime,
     ) -> Result<rustls::client::danger::ServerCertVerified, rustls::Error> {
-        let actual_fp = clipsync_core::fingerprint::spki_sha256(end_entity.as_ref())
-            .map_err(|e| {
+        let actual_fp =
+            clipsync_core::fingerprint::spki_sha256(end_entity.as_ref()).map_err(|e| {
                 rustls::Error::General(format!("fingerprint computation failed: {}", e))
             })?;
 

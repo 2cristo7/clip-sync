@@ -153,7 +153,10 @@ fn golden_pair_response_has_correct_format() {
 
     // Token: valid base64 (production uses 32 bytes; golden file is a test fixture)
     let token_bytes = BASE64.decode(&resp.token).unwrap();
-    assert!(!token_bytes.is_empty(), "token must decode to non-empty bytes");
+    assert!(
+        !token_bytes.is_empty(),
+        "token must decode to non-empty bytes"
+    );
 
     // Sig: valid base64, HMAC-SHA256 output = 32 bytes
     let sig_bytes = BASE64.decode(&resp.sig).unwrap();
@@ -161,7 +164,10 @@ fn golden_pair_response_has_correct_format() {
 
     // Secret: valid base64 (production uses 32 bytes; golden file is a test fixture)
     let secret_bytes = BASE64.decode(&resp.secret).unwrap();
-    assert!(!secret_bytes.is_empty(), "secret must decode to non-empty bytes");
+    assert!(
+        !secret_bytes.is_empty(),
+        "secret must decode to non-empty bytes"
+    );
 }
 
 // ─── HMAC: wrong secret fails verification ───────────────────────
