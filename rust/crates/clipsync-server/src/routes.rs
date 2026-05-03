@@ -16,10 +16,36 @@ use clipsync_core::protocol::{unix_millis, ClipPayload};
 
 use crate::auth::auth_layer;
 use crate::errors::{classify_decode_failure, InjectError};
+use crate::rate_limit::{rate_limit_layer, RateLimiter};
 use crate::AppState;
 
 /// Build the main Axum router with all endpoints.
+///
+/// Uses a fresh [`RateLimiter`] — call [`build_router_with_limiter`] if
+/// you need to share the limiter state across multiple router instances
+/// (e.g. for a "server restart" path that keeps in-flight throttling).
 pub fn build_router(state: Arc<AppState>) -> axum::Router {
+    build_router_with_limiter(state, RateLimiter::new())
+}
+
+/// Build the router with an externally-supplied rate limiter.
+///
+/// Tower layer order is **bottom-up**: the layer added last runs first.
+/// We register them in this order so the request flow is:
+///
+/// ```text
+/// rate_limit_layer  (outermost — runs first; throttles bad-token storms
+///                    BEFORE auth would 401 them)
+///   └─ auth_layer            (Bearer + HMAC for /inject)
+///      └─ RequestBodyLimitLayer
+///         └─ route handler
+/// ```
+///
+/// This is the fix for the original Mac bug ported here from
+/// `e2cb5451`: previously the limiter ran inside the `/inject` handler,
+/// so attackers spamming bad tokens hit the 401 path forever and the
+/// limiter never engaged.
+pub fn build_router_with_limiter(state: Arc<AppState>, limiter: RateLimiter) -> axum::Router {
     axum::Router::new()
         .route("/health", get(health))
         .route("/pair", get(pair))
@@ -29,6 +55,10 @@ pub fn build_router(state: Arc<AppState>) -> axum::Router {
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             auth_layer,
+        ))
+        .layer(axum::middleware::from_fn_with_state(
+            limiter,
+            rate_limit_layer,
         ))
         .with_state(state)
 }

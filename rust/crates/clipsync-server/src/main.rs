@@ -147,7 +147,18 @@ async fn main() {
             };
 
             let io = hyper_util::rt::TokioIo::new(tls_stream);
-            let service = hyper_util::service::TowerToHyperService::new(app);
+
+            // Inject the peer's `SocketAddr` as `ConnectInfo` so the
+            // rate-limit middleware can throttle per-IP.
+            // (Hummingbird gives this for free; with hyper-util we wrap
+            // the service to add it manually.)
+            use tower::ServiceExt;
+            let svc = app.map_request(move |mut req: axum::http::Request<_>| {
+                req.extensions_mut()
+                    .insert(axum::extract::ConnectInfo(peer_addr));
+                req
+            });
+            let service = hyper_util::service::TowerToHyperService::new(svc);
 
             if let Err(e) =
                 hyper_util::server::conn::auto::Builder::new(hyper_util::rt::TokioExecutor::new())
