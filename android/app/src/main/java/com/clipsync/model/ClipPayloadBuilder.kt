@@ -17,7 +17,7 @@ object ClipPayloadBuilder {
             type = "text",
             mime = "text/plain",
             data = b64,
-            ts = clockMs / 1000L,
+            ts = clockMs,
             nonce = UUID.randomUUID().toString()
         )
     }
@@ -28,7 +28,7 @@ object ClipPayloadBuilder {
             type = "image",
             mime = mime,
             data = b64,
-            ts = clockMs / 1000L,
+            ts = clockMs,
             nonce = UUID.randomUUID().toString()
         )
     }
@@ -39,7 +39,7 @@ object ClipPayloadBuilder {
             type = "file",
             mime = mime,
             data = b64,
-            ts = clockMs / 1000L,
+            ts = clockMs,
             nonce = UUID.randomUUID().toString(),
             name = name
         )

@@ -12,7 +12,7 @@ data class ClipPayload(
     val type: String,      // "text" | "image" | "file"
     val mime: String,
     val data: String,      // base64 encoded payload
-    val ts: Long,          // unix seconds
+    val ts: Long,          // unix milliseconds
     val nonce: String,
     val name: String? = null
 ) {
@@ -21,8 +21,8 @@ data class ClipPayload(
         require(mime.isNotEmpty() && mime.length <= 256) { "Invalid MIME: $mime" }
         require(nonce.isNotEmpty()) { "Empty nonce" }
         name?.let { require(it.length <= 1024) { "Name too long: ${it.length}" } }
-        val nowSec = System.currentTimeMillis() / 1000L
-        require(kotlin.math.abs(nowSec - ts) < 5 * 60) { "Timestamp out of range" }
+        val nowMs = System.currentTimeMillis()
+        require(kotlin.math.abs(nowMs - ts) < 5 * 60 * 1000) { "Timestamp out of range" }
     }
 
     fun toJson(): String {
