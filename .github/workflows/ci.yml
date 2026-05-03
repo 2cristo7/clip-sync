@@ -3,8 +3,20 @@ name: CI
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - 'releases/**'
+      - '*.png'
+      - '*.jpg'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
+      - 'releases/**'
+      - '*.png'
+      - '*.jpg'
 
 jobs:
   mac:
@@ -23,13 +35,6 @@ jobs:
           key: spm-${{ runner.os }}-${{ hashFiles('mac/ClipSync.xcodeproj/project.pbxproj') }}
           restore-keys: spm-${{ runner.os }}-
 
-      - name: Cache DerivedData
-        uses: actions/cache@v4
-        with:
-          path: ~/Library/Developer/Xcode/DerivedData
-          key: xcode-${{ runner.os }}-${{ hashFiles('mac/ClipSync.xcodeproj/project.pbxproj', 'mac/**/*.swift') }}
-          restore-keys: xcode-${{ runner.os }}-
-
       - name: Build and test
         run: |
           xcodebuild test \
@@ -37,6 +42,7 @@ jobs:
             -scheme ClipSync \
             -destination "platform=macOS" \
             -resultBundlePath build/results.xcresult \
+            -parallel-testing-enabled YES \
             ARCHS=arm64 \
             ONLY_ACTIVE_ARCH=YES \
             CODE_SIGN_IDENTITY="-" \
