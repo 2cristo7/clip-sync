@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use axum::body::Bytes;
 use axum::extract::ws::{Message, WebSocket};
 use axum::extract::{Query, State, WebSocketUpgrade};
 use axum::http::{HeaderMap, StatusCode};
@@ -11,9 +12,10 @@ use tower_http::limit::RequestBodyLimitLayer;
 
 use clipsync_core::config::{MAX_PAYLOAD_BYTES, VERSION};
 use clipsync_core::pairing::create_pair_response;
-use clipsync_core::protocol::{unix_millis, ClipPayload, PayloadValidationError};
+use clipsync_core::protocol::{unix_millis, ClipPayload};
 
 use crate::auth::auth_layer;
+use crate::errors::{classify_decode_failure, InjectError};
 use crate::AppState;
 
 /// Build the main Axum router with all endpoints.
@@ -98,35 +100,38 @@ struct InjectResponse {
     nonce: String,
 }
 
-#[derive(Serialize)]
-struct InjectError {
-    ok: bool,
-    error: String,
-    detail: String,
-}
-
+/// `POST /inject`.
+///
+/// All 4xx responses use the standardized body shape from
+/// [`crate::errors::InjectError`]:
+///
+/// ```json
+/// { "error": "<machine-code>", "message": "<human-readable>" }
+/// ```
+///
+/// Codes returned: `decode_error`, `timestamp_out_of_range`,
+/// `payload_too_large`, `unsupported_kind`. See `errors.rs` for details.
 async fn inject(
     State(state): State<Arc<AppState>>,
-    Json(payload): Json<ClipPayload>,
-) -> Result<Json<InjectResponse>, (StatusCode, Json<InjectError>)> {
-    // ClipPayload.ts is in MILLISECONDS. See CLAUDE.md §"Wire Protocol Invariants".
-    let now_ms = unix_millis() as i64;
-    if let Err(e) = payload.validate(now_ms) {
-        let (code, detail) = match e {
-            PayloadValidationError::TimestampOutOfRange { delta_ms, max_ms } => (
-                "timestamp_out_of_range",
-                format!("delta_ms={delta_ms} max_ms={max_ms}"),
-            ),
-        };
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(InjectError {
-                ok: false,
-                error: code.to_string(),
-                detail,
-            }),
-        ));
+    body: Bytes,
+) -> Result<Json<InjectResponse>, InjectError> {
+    // 1. Body size — explicit check so the response is our standardized shape
+    //    rather than the layer's default 413 plain-text body.
+    if body.len() > MAX_PAYLOAD_BYTES {
+        return Err(InjectError::PayloadTooLarge(format!(
+            "body is {} bytes, max {MAX_PAYLOAD_BYTES} bytes",
+            body.len()
+        )));
     }
+
+    // 2. Decode + classify (decode_error vs unsupported_kind).
+    let payload: ClipPayload =
+        serde_json::from_slice(&body).map_err(|_| classify_decode_failure(&body))?;
+
+    // 3. Validate (timestamp window, etc.).
+    //    ClipPayload.ts is in MILLISECONDS. See CLAUDE.md §"Wire Protocol Invariants".
+    let now_ms = unix_millis() as i64;
+    payload.validate(now_ms).map_err(InjectError::from)?;
 
     let nonce = uuid::Uuid::new_v4().to_string();
 

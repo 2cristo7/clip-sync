@@ -515,3 +515,170 @@ async fn unregistered_token_returns_401() {
     let resp = app.oneshot(req).await.unwrap();
     assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
 }
+
+// ─── /inject 400 error body shape (Phase 1.3) ────────────────────
+//
+// All 4xx responses from `/inject` use the standardized JSON body:
+//   { "error": "<machine-code>", "message": "<human-readable>" }
+// Codes: decode_error | timestamp_out_of_range | payload_too_large | unsupported_kind.
+
+/// Helper: register a fresh token in `state` and return the secret used to sign.
+async fn register_inject_token(state: &Arc<AppState>, token: &str) -> &'static [u8] {
+    let mut ts = state.token_store.write().await;
+    ts.register(token.as_bytes(), "test-device").unwrap();
+    b"clipsync-pairing"
+}
+
+/// Helper: assert the 400 body matches the standardized `{error, message}` shape
+/// and return the parsed JSON for further assertions.
+async fn assert_inject_400_body(resp: axum::response::Response) -> serde_json::Value {
+    assert_eq!(
+        resp.status(),
+        StatusCode::BAD_REQUEST,
+        "expected 400 Bad Request"
+    );
+    let bytes = axum::body::to_bytes(resp.into_body(), 4096).await.unwrap();
+    let json: serde_json::Value =
+        serde_json::from_slice(&bytes).expect("400 body must be valid JSON");
+    let obj = json.as_object().expect("400 body must be a JSON object");
+    assert_eq!(
+        obj.len(),
+        2,
+        "400 body must have exactly 2 fields, got: {json}"
+    );
+    assert!(
+        obj.contains_key("error"),
+        "400 body must contain `error`, got: {json}"
+    );
+    assert!(
+        obj.contains_key("message"),
+        "400 body must contain `message`, got: {json}"
+    );
+    assert!(json["error"].is_string(), "`error` must be a string");
+    assert!(json["message"].is_string(), "`message` must be a string");
+    json
+}
+
+#[tokio::test]
+async fn inject_malformed_json_returns_400_decode_error() {
+    let state = test_state();
+    let token = "decode-err-token";
+    let secret = register_inject_token(&state, token).await;
+
+    let bad_body: Vec<u8> = b"{not valid json".to_vec();
+    let ts = now_ts();
+    let sig = hmac::sign(secret, ts, &bad_body);
+
+    let app = build_router(state);
+    let req = Request::builder()
+        .method("POST")
+        .uri("/inject")
+        .header("Content-Type", "application/json")
+        .header("Authorization", format!("Bearer {token}"))
+        .header("X-ClipSync-Signature", sig)
+        .body(Body::from(bad_body))
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    let body = assert_inject_400_body(resp).await;
+    assert_eq!(
+        body["error"], "decode_error",
+        "expected decode_error, got body: {body}"
+    );
+    assert!(
+        !body["message"].as_str().unwrap().is_empty(),
+        "message must be non-empty"
+    );
+}
+
+#[tokio::test]
+async fn inject_stale_timestamp_returns_400_timestamp_out_of_range() {
+    let state = test_state();
+    let token = "stale-ts-token";
+    let secret = register_inject_token(&state, token).await;
+
+    // Build a payload with `ts` 10 minutes in the past — outside the 5-min window.
+    // ClipPayload.ts is in MILLISECONDS. See CLAUDE.md §"Wire Protocol Invariants".
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+    let stale_ms = now_ms - 10 * 60 * 1000;
+    let payload = serde_json::json!({
+        "type": "text",
+        "mime": "text/plain",
+        "data": "aGVsbG8=",
+        "ts": stale_ms,
+        "nonce": "00000000-0000-0000-0000-000000000000",
+        "name": null
+    });
+    let body_bytes = serde_json::to_vec(&payload).unwrap();
+
+    // HMAC `t=` is in seconds and must be within ±60s — sign with current time
+    // so we exercise the payload-level validation, not the HMAC layer.
+    let ts = now_ts();
+    let sig = hmac::sign(secret, ts, &body_bytes);
+
+    let app = build_router(state);
+    let req = Request::builder()
+        .method("POST")
+        .uri("/inject")
+        .header("Content-Type", "application/json")
+        .header("Authorization", format!("Bearer {token}"))
+        .header("X-ClipSync-Signature", sig)
+        .body(Body::from(body_bytes))
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    let body = assert_inject_400_body(resp).await;
+    assert_eq!(
+        body["error"], "timestamp_out_of_range",
+        "expected timestamp_out_of_range, got body: {body}"
+    );
+    assert!(
+        body["message"].as_str().unwrap().contains("ms"),
+        "message should mention ms-deviation, got: {body}"
+    );
+}
+
+#[tokio::test]
+async fn inject_unknown_clip_type_returns_400_unsupported_kind() {
+    let state = test_state();
+    let token = "unsupp-kind-token";
+    let secret = register_inject_token(&state, token).await;
+
+    // ClipPayload.ts is in MILLISECONDS. See CLAUDE.md §"Wire Protocol Invariants".
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+    let payload = serde_json::json!({
+        "type": "audio",
+        "mime": "audio/mpeg",
+        "data": "aGVsbG8=",
+        "ts": now_ms,
+        "nonce": "00000000-0000-0000-0000-000000000000",
+        "name": null
+    });
+    let body_bytes = serde_json::to_vec(&payload).unwrap();
+
+    let ts = now_ts();
+    let sig = hmac::sign(secret, ts, &body_bytes);
+
+    let app = build_router(state);
+    let req = Request::builder()
+        .method("POST")
+        .uri("/inject")
+        .header("Content-Type", "application/json")
+        .header("Authorization", format!("Bearer {token}"))
+        .header("X-ClipSync-Signature", sig)
+        .body(Body::from(body_bytes))
+        .unwrap();
+
+    let resp = app.oneshot(req).await.unwrap();
+    let body = assert_inject_400_body(resp).await;
+    assert_eq!(
+        body["error"], "unsupported_kind",
+        "expected unsupported_kind, got body: {body}"
+    );
+}
