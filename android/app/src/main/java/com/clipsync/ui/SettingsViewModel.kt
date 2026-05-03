@@ -28,6 +28,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
 import rikka.shizuku.Shizuku
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -273,6 +274,8 @@ class SettingsViewModel : ViewModel() {
                         }
                     }
                 }
+            } catch (t: CancellationException) {
+                throw t
             } catch (t: Throwable) {
                 L.warn(M, "discovery crashed: ${t.message}")
                 addError(AppError(
@@ -281,11 +284,10 @@ class SettingsViewModel : ViewModel() {
                     detail = t.message,
                     suggestion = "Discovery will restart on next network change.",
                 ))
-            }
-            // Auto-restart discovery after unexpected completion (with backoff)
-            if (_state.value.status is ConnectionStatus.Disconnected) {
-                delay(5000)
-                startDiscovery(context)
+                if (_state.value.status is ConnectionStatus.Disconnected) {
+                    delay(5000)
+                    startDiscovery(context)
+                }
             }
         }
     }
