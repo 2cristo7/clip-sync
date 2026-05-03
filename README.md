@@ -6,6 +6,14 @@
 
 ---
 
+> 🚧 **Multi-OS version in development.** A cross-platform Rust rewrite covering **Windows, Linux, macOS, and Android** is actively being built in two flavors:
+> - **Personal** — mesh any-to-any for users with 2–3 PCs + phone, friendly UI
+> - **Enterprise** — dedicated server + clients with admin dashboard, granular per-device policy, file broadcast
+>
+> Roadmap and phase-by-phase plans live in [`docs/plans/`](docs/plans/). The current Mac + Android product on `main` (this README) remains the stable, supported release.
+
+---
+
 ## Install
 
 ```bash
