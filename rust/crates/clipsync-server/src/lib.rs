@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod clipboard_injector;
 pub mod clipboard_watcher;
+pub mod errors;
 pub mod routes;
 pub mod tray;
 pub mod ws_hub;
