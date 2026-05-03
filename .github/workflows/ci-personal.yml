@@ -11,11 +11,6 @@ on:
     paths:
       - 'rust/**'
       - '.github/workflows/ci-personal.yml'
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - '**/screenshots/**'
-      - '*.png'
   pull_request:
     branches: [product/personal]
     paths-ignore:
