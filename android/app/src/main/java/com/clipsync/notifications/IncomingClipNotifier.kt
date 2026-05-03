@@ -24,8 +24,8 @@ import java.io.File
 /**
  * Builds and posts notifications for frames received from the Mac.
  *
- * Channel `clipsync_incoming` is IMPORTANCE_DEFAULT with sound disabled so
- * incoming clips are visible but non-intrusive.
+ * Channel `clipsync_incoming_v2` is IMPORTANCE_LOW with sound and vibration
+ * disabled — incoming clips show in tray and status bar but never heads-up.
  *
  * Each notification carries a [PendingIntent] to [ApplyClipActivity] — a
  * translucent trampoline that writes the clip to the system clipboard and
@@ -40,10 +40,13 @@ class IncomingClipNotifier(
     fun ensureChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            // Channel importance is immutable after creation; bump the id when
+            // changing it so the new settings take effect on upgraded installs.
+            nm.deleteNotificationChannel("clipsync_incoming")
             val channel = NotificationChannel(
                 CHANNEL_ID,
                 "Incoming clips",
-                NotificationManager.IMPORTANCE_DEFAULT
+                NotificationManager.IMPORTANCE_LOW
             ).apply {
                 description = "New text or image received from the Mac"
                 setSound(null, null)
@@ -95,7 +98,7 @@ class IncomingClipNotifier(
             .setContentTitle("Text from Mac")
             .setContentText(preview)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
             .setAutoCancel(true)
             .setContentIntent(pi)
     }
@@ -144,7 +147,7 @@ class IncomingClipNotifier(
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("Image from Mac")
             .setContentText(payload.mime)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
             .setAutoCancel(true)
             .setContentIntent(tapPi)
             .addAction(0, context.getString(R.string.action_save_to_gallery), savePi)
@@ -188,7 +191,7 @@ class IncomingClipNotifier(
             .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle("File from Mac")
             .setContentText("$fileName ($sizeText)")
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
             .setAutoCancel(true)
             .setContentIntent(savePi)
             .addAction(0, context.getString(R.string.action_save_to_downloads), savePi)
@@ -220,7 +223,7 @@ class IncomingClipNotifier(
     }
 
     companion object {
-        const val CHANNEL_ID = "clipsync_incoming"
+        const val CHANNEL_ID = "clipsync_incoming_v2"
         private const val NOTIF_ID_TEXT = 4244   // text notifications replace each other
         const val NOTIF_ID_IMAGE = 4245          // image notifications replace each other (separate slot)
         const val NOTIF_ID_FILE = 4246           // file notifications replace each other (separate slot)
