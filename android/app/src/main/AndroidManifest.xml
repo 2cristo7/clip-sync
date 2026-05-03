@@ -79,8 +79,6 @@
         <activity
             android:name="com.clipsync.share.MacShareActivity"
             android:label="Mac"
-            android:icon="@drawable/ic_mac_share"
-            android:roundIcon="@drawable/ic_mac_share"
             android:exported="true"
             android:excludeFromRecents="true"
             android:noHistory="true"
