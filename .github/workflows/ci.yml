@@ -9,9 +9,12 @@ on:
 jobs:
   mac:
     name: macOS Build & Test
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.app
 
       - name: Build and test
         run: |
@@ -20,6 +23,8 @@ jobs:
             -scheme ClipSync \
             -destination "platform=macOS" \
             -resultBundlePath build/results.xcresult \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=YES \
             CODE_SIGN_IDENTITY="-" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
