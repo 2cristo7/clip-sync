@@ -17,4 +17,6 @@ Swift on Mac (menu bar app), Kotlin on Android. Custom protocol over WebSocket, 
 
 Personal project. I use it every day. It's what happens when a tool doesn't exist and you need it to.
 
-Coming soon: a cross-platform version to connect Mac, Linux, and Windows to each other — because the problem isn't just Android and Mac.
+GitHub: https://github.com/2cristo7/clip-sync
+
+#OpenSource #SideProject #Swift #Kotlin #Android #macOS #Developer #IndieHacker #MobileDevlopment #Privacy
