@@ -66,3 +66,6 @@ yarn-error.log*
 *.key
 *.p12
 secrets/
+
+# Release artifacts (staged locally, uploaded to GitHub Releases)
+/releases/
