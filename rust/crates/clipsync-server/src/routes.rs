@@ -4,14 +4,14 @@ use axum::body::Bytes;
 use axum::extract::ws::{Message, WebSocket};
 use axum::extract::{Query, State, WebSocketUpgrade};
 use axum::http::{HeaderMap, StatusCode};
-use axum::response::IntoResponse;
+use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::Json;
 use serde::{Deserialize, Serialize};
 use tower_http::limit::RequestBodyLimitLayer;
 
 use clipsync_core::config::{MAX_PAYLOAD_BYTES, VERSION};
-use clipsync_core::pairing::create_pair_response;
+use clipsync_core::pairing::{create_pair_response, PairingError};
 use clipsync_core::protocol::{unix_millis, ClipPayload};
 
 use crate::auth::auth_layer;
@@ -87,21 +87,48 @@ struct PairQuery {
     code: String,
 }
 
+/// Body shape for `/pair` 401 responses.
+///
+/// Note: this is intentionally `{"error": "<code>"}` — there is no
+/// `message` field. `/inject` uses a different shape
+/// (`{error, message}`, see [`crate::errors::InjectError`]). The plan
+/// (Phase 1.5) keeps these separate on purpose: `/pair` codes mirror the
+/// Mac Swift vocabulary verbatim (`invalid | expired | consumed |
+/// notStarted`) so Android/Tauri clients can decode them as a closed enum
+/// without needing to inspect a free-form message.
+#[derive(Serialize)]
+struct PairErrorBody {
+    error: &'static str,
+}
+
+/// Convert a [`PairingError`] into the HTTP response the wire protocol
+/// expects: `401 Unauthorized` with `{"error": "<code>"}`.
+fn pair_error_response(err: PairingError) -> Response {
+    (
+        StatusCode::UNAUTHORIZED,
+        Json(PairErrorBody { error: err.code() }),
+    )
+        .into_response()
+}
+
 async fn pair(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
     Query(query): Query<PairQuery>,
-) -> Result<impl IntoResponse, StatusCode> {
+) -> Response {
     let device = headers
         .get("X-ClipSync-Device")
         .and_then(|v| v.to_str().ok())
         .unwrap_or("unknown")
         .to_string();
 
-    // Validate pairing code
-    let mut pm = state.pairing_manager.write().await;
-    if pm.validate_and_consume(&query.code).is_err() {
-        return Err(StatusCode::UNAUTHORIZED);
+    // Validate pairing code — surface the precise PairingError variant so
+    // the 401 body carries the matching wire code.
+    {
+        let mut pm = state.pairing_manager.write().await;
+        if let Err(e) = pm.validate_and_consume(&query.code) {
+            return pair_error_response(e);
+        }
     }
 
     // Generate pairing response (token + secret)
@@ -113,13 +140,13 @@ async fn pair(
     let mut ts = state.token_store.write().await;
     if let Err(e) = ts.register(token_bytes, &device) {
         tracing::error!("Failed to register token: {e}");
-        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
     if let Err(e) = ts.save() {
         tracing::error!("Failed to save token store: {e}");
     }
 
-    Ok(Json(resp))
+    Json(resp).into_response()
 }
 
 // --- /inject ---
