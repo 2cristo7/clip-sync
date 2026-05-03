@@ -27,8 +27,7 @@ pub enum HmacError {
 /// The signing message is: `"<timestamp>.<body_bytes>"`
 pub fn sign(secret: &[u8], timestamp: u64, body: &[u8]) -> String {
     let message = format!("{}.", timestamp);
-    let mut mac = HmacSha256::new_from_slice(secret)
-        .expect("HMAC can accept any key length");
+    let mut mac = HmacSha256::new_from_slice(secret).expect("HMAC can accept any key length");
     mac.update(message.as_bytes());
     mac.update(body);
     let result = mac.finalize();
@@ -53,10 +52,7 @@ pub fn verify(
     // Check timestamp skew
     let delta = (now as i64) - (ts as i64);
     if delta.abs() > max_skew {
-        return Err(HmacError::TimestampSkew {
-            delta,
-            max_skew,
-        });
+        return Err(HmacError::TimestampSkew { delta, max_skew });
     }
 
     // Recompute expected signature

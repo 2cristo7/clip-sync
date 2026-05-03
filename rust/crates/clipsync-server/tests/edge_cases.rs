@@ -135,7 +135,11 @@ async fn concurrent_inject_requests() {
 
     for handle in handles {
         let status = handle.await.unwrap();
-        assert_eq!(status, StatusCode::OK, "all concurrent requests must succeed");
+        assert_eq!(
+            status,
+            StatusCode::OK,
+            "all concurrent requests must succeed"
+        );
     }
 }
 
@@ -204,7 +208,11 @@ async fn oversized_payload_rejected() {
 
     let resp = app.oneshot(req).await.unwrap();
     // Should be 413 Payload Too Large or similar error
-    assert_ne!(resp.status(), StatusCode::OK, "oversized payload must be rejected");
+    assert_ne!(
+        resp.status(),
+        StatusCode::OK,
+        "oversized payload must be rejected"
+    );
 }
 
 // ─── token revocation: revoke then request returns 401 ───────────
@@ -363,7 +371,11 @@ async fn invalid_json_body_rejected() {
         .unwrap();
 
     let resp = app.oneshot(req).await.unwrap();
-    assert_ne!(resp.status(), StatusCode::OK, "invalid JSON must be rejected");
+    assert_ne!(
+        resp.status(),
+        StatusCode::OK,
+        "invalid JSON must be rejected"
+    );
 }
 
 // ─── missing auth header → 401 ──────────────────────────────────

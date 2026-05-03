@@ -53,11 +53,7 @@ impl Drop for MdnsGuard {
 /// Advertise this ClipSync instance via mDNS.
 ///
 /// Returns a guard that will unregister the service when dropped.
-pub fn advertise(
-    port: u16,
-    hostname: &str,
-    fingerprint: &str,
-) -> Result<MdnsGuard, MdnsError> {
+pub fn advertise(port: u16, hostname: &str, fingerprint: &str) -> Result<MdnsGuard, MdnsError> {
     let daemon = ServiceDaemon::new().map_err(|e| MdnsError::Daemon(e.to_string()))?;
 
     let mut properties = HashMap::new();
@@ -124,7 +120,7 @@ pub fn discover(timeout: Duration) -> Result<Vec<DiscoveredServer>, MdnsError> {
                     addresses: info.get_addresses().iter().copied().collect(),
                 });
             }
-            Ok(_) => {} // other events
+            Ok(_) => {}  // other events
             Err(_) => {} // timeout on recv, continue loop
         }
     }

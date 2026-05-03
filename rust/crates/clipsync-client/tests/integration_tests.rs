@@ -3,8 +3,8 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
+use base64::Engine;
 
 use clipsync_core::clipboard::{ClipboardError, ClipboardProvider};
 use clipsync_core::config::PORT;

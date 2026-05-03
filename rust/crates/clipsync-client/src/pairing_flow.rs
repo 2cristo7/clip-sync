@@ -2,8 +2,8 @@ use std::io::{self, Write};
 use std::sync::Arc;
 use std::time::Duration;
 
-use base64::Engine;
 use base64::engine::general_purpose::STANDARD as BASE64;
+use base64::Engine;
 use reqwest::Client;
 use rustls::pki_types::ServerName;
 use tracing::info;
@@ -153,7 +153,9 @@ async fn discover_server() -> Result<DiscoveredServer, PairingError> {
     }
 
     print!("Select server [1]: ");
-    io::stdout().flush().map_err(|e| PairingError::Http(e.to_string()))?;
+    io::stdout()
+        .flush()
+        .map_err(|e| PairingError::Http(e.to_string()))?;
 
     let mut input = String::new();
     io::stdin()

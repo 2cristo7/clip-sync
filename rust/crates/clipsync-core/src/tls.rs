@@ -75,7 +75,11 @@ impl TlsIdentity {
 
         // Subject Alternative Names
         let mut sans = vec![
-            SanType::DnsName("localhost".try_into().map_err(|e: rcgen::Error| TlsError::CertGeneration(e.to_string()))?),
+            SanType::DnsName(
+                "localhost"
+                    .try_into()
+                    .map_err(|e: rcgen::Error| TlsError::CertGeneration(e.to_string()))?,
+            ),
             SanType::IpAddress(std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST)),
         ];
 

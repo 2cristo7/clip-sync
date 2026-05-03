@@ -90,11 +90,7 @@ impl TokenStore {
     }
 
     /// Register a new token.
-    pub fn register(
-        &mut self,
-        token_bytes: &[u8],
-        device: &str,
-    ) -> Result<(), TokenStoreError> {
+    pub fn register(&mut self, token_bytes: &[u8], device: &str) -> Result<(), TokenStoreError> {
         let hash = Self::hash_token(token_bytes);
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

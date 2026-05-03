@@ -1,4 +1,4 @@
-use clipsync_core::clipboard::{ClipboardProvider, SystemClipboard, notify_received};
+use clipsync_core::clipboard::{notify_received, ClipboardProvider, SystemClipboard};
 use clipsync_core::protocol::{ClipPayload, ClipType};
 
 /// Inject a payload into the system clipboard and show notification for non-text.

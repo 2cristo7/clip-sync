@@ -14,7 +14,10 @@ fn golden_hmac_vector_integration() {
 
     // Sign and verify the result matches
     let header = hmac::sign(&secret, timestamp, body.as_bytes());
-    assert_eq!(header, expected_header, "HMAC signature does not match golden vector");
+    assert_eq!(
+        header, expected_header,
+        "HMAC signature does not match golden vector"
+    );
 
     // Verification should succeed with same timestamp
     assert!(
@@ -53,5 +56,8 @@ fn replay_beyond_skew_rejected() {
 
     // 120 seconds later, beyond 60s skew
     let result = hmac::verify(secret, &header, body, old_ts + 120, 60);
-    assert!(result.is_err(), "Replay beyond skew window should be rejected");
+    assert!(
+        result.is_err(),
+        "Replay beyond skew window should be rejected"
+    );
 }

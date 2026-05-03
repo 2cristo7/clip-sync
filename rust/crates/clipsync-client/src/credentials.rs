@@ -31,22 +31,18 @@ impl ClientCredentials {
 
     /// Load credentials from a JSON file.
     pub fn load(path: &Path) -> Result<Self, CredentialError> {
-        let data = std::fs::read_to_string(path)
-            .map_err(|e| CredentialError::Io(e.to_string()))?;
-        serde_json::from_str(&data)
-            .map_err(|e| CredentialError::Parse(e.to_string()))
+        let data = std::fs::read_to_string(path).map_err(|e| CredentialError::Io(e.to_string()))?;
+        serde_json::from_str(&data).map_err(|e| CredentialError::Parse(e.to_string()))
     }
 
     /// Save credentials to a JSON file.
     pub fn save(&self, path: &Path) -> Result<(), CredentialError> {
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)
-                .map_err(|e| CredentialError::Io(e.to_string()))?;
+            std::fs::create_dir_all(parent).map_err(|e| CredentialError::Io(e.to_string()))?;
         }
         let json = serde_json::to_string_pretty(self)
             .map_err(|e| CredentialError::Parse(e.to_string()))?;
-        std::fs::write(path, json)
-            .map_err(|e| CredentialError::Io(e.to_string()))?;
+        std::fs::write(path, json).map_err(|e| CredentialError::Io(e.to_string()))?;
         Ok(())
     }
 

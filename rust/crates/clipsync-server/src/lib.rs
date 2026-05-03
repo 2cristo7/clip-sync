@@ -8,8 +8,8 @@ pub mod ws_hub;
 use std::path::PathBuf;
 
 use clipsync_core::pairing::PairingManager;
-use clipsync_core::token_store::TokenStore;
 use clipsync_core::tls::TlsIdentity;
+use clipsync_core::token_store::TokenStore;
 use tokio::sync::RwLock;
 
 use crate::ws_hub::WsHub;

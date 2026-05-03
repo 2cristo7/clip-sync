@@ -10,10 +10,7 @@ pub fn spki_sha256(cert_der: &[u8]) -> Result<String, String> {
     let (_, cert) = X509Certificate::from_der(cert_der)
         .map_err(|e| format!("failed to parse certificate: {}", e))?;
 
-    let spki_der = cert
-        .tbs_certificate
-        .subject_pki
-        .raw;
+    let spki_der = cert.tbs_certificate.subject_pki.raw;
 
     let hash = Sha256::digest(spki_der);
     Ok(BASE64URL_NOPAD.encode(&hash))
@@ -34,7 +31,9 @@ mod tests {
         assert!(!fp.contains('='));
         assert!(!fp.contains('+'));
         assert!(!fp.contains('/'));
-        assert!(fp.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-'));
+        assert!(fp
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-'));
 
         // SHA-256 = 32 bytes → 43 base64url chars (no padding)
         assert_eq!(fp.len(), 43);
