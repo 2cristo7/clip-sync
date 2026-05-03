@@ -173,8 +173,14 @@ final class ClipServer {
             guard estimatedSize <= 20 * 1024 * 1024 else {
                 throw HTTPError(.contentTooLarge)
             }
-            let payload = try JSONDecoder().decode(ClipPayload.self, from: buffer)
-            try payload.validate()
+            let payload: ClipPayload
+            do {
+                payload = try JSONDecoder().decode(ClipPayload.self, from: buffer)
+                try payload.validate()
+            } catch {
+                context.logger.warning("inject decode/validate failed: \(error)")
+                throw HTTPError(.badRequest, message: String(describing: error))
+            }
             context.logger.info("inject received", metadata: [
                 "source": .string(sourceTag ?? "unknown"),
                 "type": .string(payload.type.rawValue),
