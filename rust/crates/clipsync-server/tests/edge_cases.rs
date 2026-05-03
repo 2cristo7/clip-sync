@@ -60,11 +60,16 @@ fn make_inject_request(token: &str, secret: &[u8], body_bytes: Vec<u8>) -> Reque
 }
 
 fn valid_payload_json() -> Vec<u8> {
+    // ClipPayload.ts is in MILLISECONDS. See CLAUDE.md §"Wire Protocol Invariants".
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
     serde_json::to_vec(&serde_json::json!({
         "type": "text",
         "mime": "text/plain",
         "data": "aGVsbG8=",
-        "ts": 1714000000u64,
+        "ts": now_ms,
         "nonce": "00000000-0000-0000-0000-000000000000",
         "name": null
     }))
@@ -114,6 +119,11 @@ async fn concurrent_inject_requests() {
         let state = state.clone();
         let handle = tokio::spawn(async move {
             let app = build_router(state);
+            // ClipPayload.ts is in MILLISECONDS. See CLAUDE.md §"Wire Protocol Invariants".
+            let now_ms = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as u64;
             let payload = serde_json::json!({
                 "type": "text",
                 "mime": "text/plain",
@@ -121,7 +131,7 @@ async fn concurrent_inject_requests() {
                     &base64::engine::general_purpose::STANDARD,
                     format!("msg-{i}")
                 ),
-                "ts": 1714000000u64 + i as u64,
+                "ts": now_ms + i as u64,
                 "nonce": uuid::Uuid::new_v4().to_string(),
                 "name": null
             });
@@ -161,11 +171,17 @@ async fn large_payload_at_limit_succeeds() {
     // RequestBodyLimitLayer(20MB) only overrides the tower body limit,
     // not the axum Json extractor default. This is tracked as tech debt.
     let large_data = "A".repeat(1024 * 1024); // 1MB of ASCII
+
+    // ClipPayload.ts is in MILLISECONDS. See CLAUDE.md §"Wire Protocol Invariants".
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
     let payload = serde_json::json!({
         "type": "text",
         "mime": "text/plain",
         "data": large_data,
-        "ts": 1714000000u64,
+        "ts": now_ms,
         "nonce": "00000000-0000-0000-0000-000000000000",
         "name": null
     });

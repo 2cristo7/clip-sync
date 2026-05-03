@@ -57,11 +57,14 @@ impl SystemClipboard {
     }
 
     /// Make a timestamp for the current instant.
+    ///
+    /// ClipPayload.ts is in MILLISECONDS. See CLAUDE.md §"Wire Protocol Invariants".
     fn now_ts() -> u64 {
+        // ClipPayload.ts is in MILLISECONDS. See CLAUDE.md §"Wire Protocol Invariants".
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
-            .as_secs()
+            .as_millis() as u64
     }
 
     /// Try to read an image from the clipboard, returning PNG bytes.
@@ -451,10 +454,11 @@ fn file_payload_from_path(path: &std::path::Path) -> Result<Option<ClipPayload>,
 
     let mime = mime_from_extension(&filename);
 
+    // ClipPayload.ts is in MILLISECONDS. See CLAUDE.md §"Wire Protocol Invariants".
     let ts = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
-        .as_secs();
+        .as_millis() as u64;
 
     Ok(Some(ClipPayload {
         clip_type: ClipType::File,

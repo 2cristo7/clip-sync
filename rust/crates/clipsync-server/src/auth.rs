@@ -68,6 +68,7 @@ pub async fn auth_layer(
         // looked up per-token from the pairing exchange.
         let secret = b"clipsync-pairing".to_vec();
 
+        // HMAC t= header is in SECONDS. See CLAUDE.md §"Wire Protocol Invariants".
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap_or_default()
