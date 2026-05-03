@@ -11,7 +11,7 @@ use tower_http::limit::RequestBodyLimitLayer;
 
 use clipsync_core::config::{MAX_PAYLOAD_BYTES, VERSION};
 use clipsync_core::pairing::create_pair_response;
-use clipsync_core::protocol::ClipPayload;
+use clipsync_core::protocol::{unix_millis, ClipPayload, PayloadValidationError};
 
 use crate::auth::auth_layer;
 use crate::AppState;
@@ -98,10 +98,36 @@ struct InjectResponse {
     nonce: String,
 }
 
+#[derive(Serialize)]
+struct InjectError {
+    ok: bool,
+    error: String,
+    detail: String,
+}
+
 async fn inject(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<ClipPayload>,
-) -> Json<InjectResponse> {
+) -> Result<Json<InjectResponse>, (StatusCode, Json<InjectError>)> {
+    // ClipPayload.ts is in MILLISECONDS. See CLAUDE.md §"Wire Protocol Invariants".
+    let now_ms = unix_millis() as i64;
+    if let Err(e) = payload.validate(now_ms) {
+        let (code, detail) = match e {
+            PayloadValidationError::TimestampOutOfRange { delta_ms, max_ms } => (
+                "timestamp_out_of_range",
+                format!("delta_ms={delta_ms} max_ms={max_ms}"),
+            ),
+        };
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(InjectError {
+                ok: false,
+                error: code.to_string(),
+                detail,
+            }),
+        ));
+    }
+
     let nonce = uuid::Uuid::new_v4().to_string();
 
     // Broadcast to all connected WebSocket clients
@@ -110,7 +136,7 @@ async fn inject(
     // Write to local clipboard
     // (clipboard injection handled by clipboard_injector module)
 
-    Json(InjectResponse { ok: true, nonce })
+    Ok(Json(InjectResponse { ok: true, nonce }))
 }
 
 // --- /ws ---

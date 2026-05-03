@@ -1,6 +1,6 @@
 {
   "secret_hex": "deadbeefcafebabe1234567890abcdef",
   "timestamp": 1714000000,
-  "body": "{\"type\":\"text\",\"mime\":\"text/plain\",\"data\":\"SGVsbG8gV29ybGQ=\",\"ts\":1714000000,\"nonce\":\"550e8400-e29b-41d4-a716-446655440000\",\"name\":null}",
-  "expected_header": "t=1714000000, v1=7267897e1c9986b5cb1ab6cc9173b6a8975ab98537241b708b8c6213f4e6d030"
+  "body": "{\"type\":\"text\",\"mime\":\"text/plain\",\"data\":\"SGVsbG8gV29ybGQ=\",\"ts\":1714000000000,\"nonce\":\"550e8400-e29b-41d4-a716-446655440000\",\"name\":null}",
+  "expected_header": "t=1714000000, v1=44bc3a08e073056fc2b640bcd8625a5e2f679edf5cfdb28039d95f1ec682022d"
 }

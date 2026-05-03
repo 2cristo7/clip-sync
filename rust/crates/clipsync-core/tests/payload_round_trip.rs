@@ -8,7 +8,7 @@ fn golden_text_round_trip() {
 
     assert_eq!(payload.clip_type, ClipType::Text);
     assert_eq!(payload.mime, "text/plain");
-    assert_eq!(payload.ts, 1714000000);
+    assert_eq!(payload.ts, 1_714_000_000_000);
     assert_eq!(payload.nonce, "550e8400-e29b-41d4-a716-446655440000");
     assert_eq!(payload.name, None);
 
@@ -29,7 +29,7 @@ fn golden_image_round_trip() {
 
     assert_eq!(payload.clip_type, ClipType::Image);
     assert_eq!(payload.mime, "image/png");
-    assert_eq!(payload.ts, 1714000001);
+    assert_eq!(payload.ts, 1_714_000_001_000);
     assert_eq!(payload.name, None);
 
     // Data should decode as valid base64 (it's a real 1x1 PNG)

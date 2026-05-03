@@ -69,18 +69,46 @@ fn clip_type_wire_format() {
     }
 }
 
-/// Verify ts is Unix seconds (not milliseconds).
+/// Cross-language compatibility golden vector — must decode and produce a
+/// payload whose `ts` is in the **milliseconds** range. Mirrors the wire
+/// format the Mac/Android peers emit.
+///
+/// ClipPayload.ts is in MILLISECONDS. See CLAUDE.md §"Wire Protocol Invariants".
 #[test]
-fn timestamp_is_unix_seconds() {
+fn compat_payload_v1_decodes_with_ms_timestamp() {
+    let raw = include_str!("../../../tests/compat/payload_v1.json");
+    let payload: ClipPayload = serde_json::from_str(raw).unwrap();
+
+    assert_eq!(payload.ts, 1_714_000_000_000);
+    // Sanity: the value lies in the ms range (>10^12), not seconds (~10^9).
+    assert!(payload.ts > 1_000_000_000_000);
+
+    // Round-trips through serde unchanged.
+    let reserialized = serde_json::to_string(&payload).unwrap();
+    assert_eq!(reserialized, raw.trim());
+
+    // Validates as fresh when "now" is at the same ms.
+    payload.validate(payload.ts as i64).unwrap();
+}
+
+/// Verify ts is Unix **milliseconds** (not seconds).
+///
+/// ClipPayload.ts is in MILLISECONDS. See CLAUDE.md §"Wire Protocol Invariants".
+#[test]
+fn timestamp_is_unix_milliseconds() {
     let golden = include_str!("../../../tests/golden/clip_payload_text.json");
     let payload: ClipPayload = serde_json::from_str(golden).unwrap();
 
-    // 1714000000 is approximately April 2024 in Unix seconds
-    // If it were milliseconds, it would be year ~56000
-    assert!(payload.ts > 1_000_000_000, "ts should be in Unix seconds");
+    // 1714000000000 is approximately April 2024 in Unix milliseconds.
+    // If it were seconds (~1.7e9), the wire format would mismatch the
+    // Mac/Android peers which always emit milliseconds.
     assert!(
-        payload.ts < 2_000_000_000,
-        "ts should be in Unix seconds, not milliseconds"
+        payload.ts > 1_000_000_000_000,
+        "ts must be in Unix milliseconds, not seconds"
+    );
+    assert!(
+        payload.ts < 9_999_999_999_999,
+        "ts must fit a sane millisecond range"
     );
 }
 

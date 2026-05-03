@@ -46,6 +46,15 @@ fn now_ts() -> u64 {
         .as_secs()
 }
 
+/// Current Unix time in **milliseconds**, for `ClipPayload.ts`.
+/// See CLAUDE.md §"Wire Protocol Invariants".
+fn now_ts_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64
+}
+
 // ─── golden file: health_response.json ───────────────────────────
 
 #[test]
@@ -103,7 +112,8 @@ fn golden_text_payload_deserializes() {
 
     assert_eq!(payload.clip_type, ClipType::Text);
     assert_eq!(payload.mime, "text/plain");
-    assert_eq!(payload.ts, 1714000000);
+    // ClipPayload.ts is in MILLISECONDS. See CLAUDE.md §"Wire Protocol Invariants".
+    assert_eq!(payload.ts, 1_714_000_000_000);
     assert_eq!(payload.nonce, "550e8400-e29b-41d4-a716-446655440000");
     assert_eq!(payload.name, None);
 
@@ -128,7 +138,8 @@ fn golden_image_payload_deserializes() {
 
     assert_eq!(payload.clip_type, ClipType::Image);
     assert_eq!(payload.mime, "image/png");
-    assert_eq!(payload.ts, 1714000001);
+    // ClipPayload.ts is in MILLISECONDS. See CLAUDE.md §"Wire Protocol Invariants".
+    assert_eq!(payload.ts, 1_714_000_001_000);
     assert_eq!(payload.nonce, "660e8400-e29b-41d4-a716-446655440001");
     assert_eq!(payload.name, None);
 }
@@ -298,7 +309,8 @@ async fn server_inject_valid_auth_succeeds() {
         "type": "text",
         "mime": "text/plain",
         "data": "SGVsbG8gV29ybGQ=",
-        "ts": 1714000000u64,
+        // ClipPayload.ts is in MILLISECONDS. See CLAUDE.md §"Wire Protocol Invariants".
+        "ts": now_ts_ms(),
         "nonce": "550e8400-e29b-41d4-a716-446655440000",
         "name": null
     });

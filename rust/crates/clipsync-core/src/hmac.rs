@@ -24,7 +24,12 @@ pub enum HmacError {
 ///
 /// Returns a header value like: `t=1714000000, v1=abcdef0123456789...`
 ///
-/// The signing message is: `"<timestamp>.<body_bytes>"`
+/// The signing message is: `"<timestamp>.<body_bytes>"`.
+///
+/// `timestamp` MUST be a Unix timestamp in **seconds** — this is independent of
+/// `ClipPayload.ts` (which is in milliseconds).
+///
+/// HMAC t= header is in SECONDS. See CLAUDE.md §"Wire Protocol Invariants".
 pub fn sign(secret: &[u8], timestamp: u64, body: &[u8]) -> String {
     let message = format!("{}.", timestamp);
     let mut mac = HmacSha256::new_from_slice(secret).expect("HMAC can accept any key length");
@@ -39,7 +44,9 @@ pub fn sign(secret: &[u8], timestamp: u64, body: &[u8]) -> String {
 ///
 /// `header` should be in format: `t=<unix_seconds>, v1=<hex>`
 /// `now` is the current Unix timestamp in seconds.
-/// `max_skew` is the maximum allowed time difference in seconds.
+/// `max_skew` is the maximum allowed time difference in seconds (typically 60).
+///
+/// HMAC t= header is in SECONDS. See CLAUDE.md §"Wire Protocol Invariants".
 pub fn verify(
     secret: &[u8],
     header: &str,

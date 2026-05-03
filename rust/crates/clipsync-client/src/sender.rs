@@ -40,7 +40,10 @@ pub async fn send_payload(
         .decode(&creds.secret)
         .map_err(|e| SendError::Hmac(format!("invalid secret: {}", e)))?;
 
-    // Sign with HMAC
+    // Sign with HMAC.
+    //
+    // HMAC t= header is in SECONDS. See CLAUDE.md §"Wire Protocol Invariants".
+    // (ClipPayload.ts inside `body` is independently in MILLISECONDS.)
     let ts = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap()

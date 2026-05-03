@@ -1,7 +1,36 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use thiserror::Error;
+
+/// Maximum allowed clock skew between sender and receiver for `ClipPayload.ts`,
+/// expressed in **milliseconds** (5 minutes).
+///
+/// Mirrors the Mac/Android invariant `abs(now_ms - ts) < 5*60*1000`.
+/// See CLAUDE.md §"Wire Protocol Invariants".
+pub const PAYLOAD_TS_MAX_SKEW_MS: i64 = 5 * 60 * 1000;
+
+/// Errors returned by [`ClipPayload::validate`].
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum PayloadValidationError {
+    /// Payload `ts` deviates from server clock by more than [`PAYLOAD_TS_MAX_SKEW_MS`].
+    #[error("timestamp_out_of_range: payload ts deviates by {delta_ms}ms (max {max_ms}ms)")]
+    TimestampOutOfRange { delta_ms: i64, max_ms: i64 },
+}
+
+/// Current Unix timestamp in **milliseconds**.
+///
+/// ClipPayload.ts is in MILLISECONDS. See CLAUDE.md §"Wire Protocol Invariants".
+pub fn unix_millis() -> u64 {
+    // ClipPayload.ts is in MILLISECONDS. See CLAUDE.md §"Wire Protocol Invariants".
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis() as u64
+}
 
 /// The type of clipboard content.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -16,8 +45,10 @@ pub enum ClipType {
 ///
 /// JSON example:
 /// ```json
-/// {"type":"text","mime":"text/plain","data":"SGVsbG8=","ts":1714000000,"nonce":"...","name":null}
+/// {"type":"text","mime":"text/plain","data":"SGVsbG8=","ts":1714000000000,"nonce":"...","name":null}
 /// ```
+///
+/// ClipPayload.ts is in MILLISECONDS. See CLAUDE.md §"Wire Protocol Invariants".
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ClipPayload {
     #[serde(rename = "type")]
@@ -25,7 +56,9 @@ pub struct ClipPayload {
     pub mime: String,
     /// Base64-encoded (standard alphabet, with padding) content.
     pub data: String,
-    /// Unix timestamp in seconds.
+    /// Unix timestamp in **milliseconds**.
+    ///
+    /// ClipPayload.ts is in MILLISECONDS. See CLAUDE.md §"Wire Protocol Invariants".
     pub ts: u64,
     /// UUID v4 nonce.
     pub nonce: String,
@@ -68,6 +101,24 @@ impl ClipPayload {
             nonce: uuid::Uuid::new_v4().to_string(),
             name: None,
         }
+    }
+
+    /// Validate the payload against a server-side now timestamp (milliseconds).
+    ///
+    /// Rejects payloads whose `ts` deviates by more than
+    /// [`PAYLOAD_TS_MAX_SKEW_MS`] from `now_ms`. Mirrors the Mac/Android
+    /// invariant `abs(now_ms - ts) < 5*60*1000`.
+    ///
+    /// ClipPayload.ts is in MILLISECONDS. See CLAUDE.md §"Wire Protocol Invariants".
+    pub fn validate(&self, now_ms: i64) -> Result<(), PayloadValidationError> {
+        let delta = now_ms - (self.ts as i64);
+        if delta.abs() >= PAYLOAD_TS_MAX_SKEW_MS {
+            return Err(PayloadValidationError::TimestampOutOfRange {
+                delta_ms: delta,
+                max_ms: PAYLOAD_TS_MAX_SKEW_MS,
+            });
+        }
+        Ok(())
     }
 }
 
@@ -158,7 +209,8 @@ mod tests {
         let payload: ClipPayload = serde_json::from_str(golden).unwrap();
         assert_eq!(payload.clip_type, ClipType::Text);
         assert_eq!(payload.mime, "text/plain");
-        assert_eq!(payload.ts, 1714000000);
+        // ClipPayload.ts is in MILLISECONDS. See CLAUDE.md §"Wire Protocol Invariants".
+        assert_eq!(payload.ts, 1_714_000_000_000);
         assert_eq!(payload.nonce, "550e8400-e29b-41d4-a716-446655440000");
         assert_eq!(payload.name, None);
 
@@ -177,7 +229,8 @@ mod tests {
         let payload: ClipPayload = serde_json::from_str(golden).unwrap();
         assert_eq!(payload.clip_type, ClipType::Image);
         assert_eq!(payload.mime, "image/png");
-        assert_eq!(payload.ts, 1714000001);
+        // ClipPayload.ts is in MILLISECONDS. See CLAUDE.md §"Wire Protocol Invariants".
+        assert_eq!(payload.ts, 1_714_000_001_000);
         assert_eq!(payload.name, None);
 
         // Re-serialize and compare
@@ -205,5 +258,53 @@ mod tests {
         };
         // Same data field → same digest
         assert_eq!(p1.digest(), p2.digest());
+    }
+
+    // ─── ts unit semantics: ms vs s ──────────────────────────────────
+
+    #[test]
+    fn validate_rejects_ts_in_seconds() {
+        // A ts value < 10^11 looks like seconds (year 5138 in seconds, 1973 in ms).
+        // Treated as ms it lies far in the past, so validation must reject it.
+        let payload = ClipPayload::text("hello", 1_714_000_000); // unix seconds-shaped
+        let now_ms = 1_714_000_000_000_i64; // current time in ms (≈ 2024-04-25)
+        let err = payload.validate(now_ms).unwrap_err();
+        assert!(matches!(
+            err,
+            PayloadValidationError::TimestampOutOfRange { .. }
+        ));
+    }
+
+    #[test]
+    fn validate_accepts_fresh_unix_millis_payload() {
+        let now = unix_millis();
+        let payload = ClipPayload::text("hello", now);
+        assert!(payload.validate(now as i64).is_ok());
+        // Within the skew window (1 second drift).
+        assert!(payload.validate(now as i64 + 1_000).is_ok());
+        assert!(payload.validate(now as i64 - 1_000).is_ok());
+    }
+
+    #[test]
+    fn validate_rejects_out_of_window_future() {
+        let payload = ClipPayload::text("hello", 1_000_000_000_000); // ms-shaped
+                                                                     // 5 minutes + 1 second in the future of payload.ts
+        let now_ms = 1_000_000_000_000 + (5 * 60 * 1000) + 1_000;
+        assert!(payload.validate(now_ms).is_err());
+    }
+
+    #[test]
+    fn validate_accepts_within_window_boundary() {
+        let payload = ClipPayload::text("hello", 1_000_000_000_000);
+        // 4 minutes 59 seconds — inside the window
+        let now_ms = 1_000_000_000_000_i64 + (4 * 60 * 1000) + 59_000;
+        assert!(payload.validate(now_ms).is_ok());
+    }
+
+    #[test]
+    fn unix_millis_returns_milliseconds_not_seconds() {
+        let now = unix_millis();
+        // Any reasonable real time is way past 10^12 ms (year 2001+).
+        assert!(now > 1_000_000_000_000, "unix_millis must return ms");
     }
 }

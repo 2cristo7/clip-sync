@@ -223,16 +223,22 @@ async fn inject_accepts_valid_bearer_and_hmac() {
 
     let app = build_router(state);
 
+    // ClipPayload.ts is in MILLISECONDS. See CLAUDE.md §"Wire Protocol Invariants".
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
     let payload = serde_json::json!({
         "type": "text",
         "mime": "text/plain",
         "data": "aGVsbG8=",
-        "ts": 1714000000u64,
+        "ts": now_ms,
         "nonce": "00000000-0000-0000-0000-000000000000",
         "name": null
     });
     let body_bytes = serde_json::to_vec(&payload).unwrap();
 
+    // HMAC t= header is in SECONDS. See CLAUDE.md §"Wire Protocol Invariants".
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
