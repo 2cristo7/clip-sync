@@ -84,8 +84,8 @@ class ClipForegroundService : Service() {
                             consecutiveFailures = 0
                         } else {
                             consecutiveFailures++
-                            L.warn(M, "health check failed ($consecutiveFailures/2): ${result.exceptionOrNull()?.message}")
-                            if (consecutiveFailures >= 2) {
+                            L.warn(M, "health check failed ($consecutiveFailures/3): ${result.exceptionOrNull()?.message}")
+                            if (consecutiveFailures >= 3) {
                                 L.warn(M, "health check: 3 consecutive failures, treating as disconnected")
                                 _serviceState.value = ServiceState.Disconnected
                                 ws?.cancel()
@@ -103,8 +103,8 @@ class ClipForegroundService : Service() {
                     handler.post {
                         if (connectedHost == null) return@post
                         consecutiveFailures++
-                        L.warn(M, "health check exception ($consecutiveFailures/2): ${t.message}")
-                        if (consecutiveFailures >= 2) {
+                        L.warn(M, "health check exception ($consecutiveFailures/3): ${t.message}")
+                        if (consecutiveFailures >= 3) {
                             L.warn(M, "health check: 3 consecutive failures, treating as disconnected")
                             _serviceState.value = ServiceState.Disconnected
                             ws?.cancel()
@@ -197,10 +197,11 @@ class ClipForegroundService : Service() {
             L.warn(M, "ImageCache cleanup failed: ${t.message}")
         }
         // Must call startForeground() promptly after startForegroundService() (Android 8+).
-        // Immediately demote so no notification appears during idle/connecting state.
-        startForeground(NOTIF_ID, buildNotification("Connected"))
-        @Suppress("DEPRECATION")
-        stopForeground(true)
+        // Stay foreground for the entire service lifetime — re-promoting from a
+        // background WS callback throws ForegroundServiceStartNotAllowedException
+        // on Android 12+. Notification text is updated via NotificationManager
+        // when state changes (connecting/connected/disconnected).
+        startForeground(NOTIF_ID, buildNotification("Starting…"))
         networkObserver = NetworkChangeObserver(this) {
             wsGeneration++  // Invalidate any pending callbacks from the old WS
             ws?.cancel()
@@ -297,7 +298,7 @@ class ClipForegroundService : Service() {
                         _serviceState.value = if (prefs.syncEnabled) ServiceState.Connected(host)
                                               else ServiceState.Paused(host)
                         L.event("WS", "connected host=$host")
-                        startForeground(NOTIF_ID, buildConnectedNotification(host))
+                        updateNotification(buildConnectedNotification(host))
                         handler.post {
                             consecutiveFailures = 0
                             handler.postDelayed(healthCheckRunnable, HEALTH_CHECK_MS)
@@ -310,8 +311,7 @@ class ClipForegroundService : Service() {
                         connectedHost = null
                         _serviceState.value = ServiceState.Disconnected
                         L.event("WS", "closed host=$host code=${status.code}")
-                        @Suppress("DEPRECATION")
-                        stopForeground(true)
+                        updateNotification(buildNotification("Disconnected · reconnecting…"))
                         handler.post {
                             handler.removeCallbacks(healthCheckRunnable)
                             consecutiveFailures = 0
@@ -325,8 +325,7 @@ class ClipForegroundService : Service() {
                         connectedHost = null
                         _serviceState.value = ServiceState.Disconnected
                         L.warn("WS", "error host=$host msg=${status.message}")
-                        @Suppress("DEPRECATION")
-                        stopForeground(true)
+                        updateNotification(buildNotification("Disconnected · reconnecting…"))
                         handler.post {
                             handler.removeCallbacks(healthCheckRunnable)
                             consecutiveFailures = 0
@@ -496,6 +495,11 @@ class ClipForegroundService : Service() {
             .build()
     }
 
+    private fun updateNotification(notification: Notification) {
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        nm.notify(NOTIF_ID, notification)
+    }
+
     // --- Shizuku polling (Tier 1) ---
 
     private fun pollViaShizuku() {
@@ -618,7 +622,7 @@ class ClipForegroundService : Service() {
         private const val INITIAL_BACKOFF_MS = 1_000L
         private const val MAX_BACKOFF_MS = 30_000L
         private const val SHIZUKU_POLL_MS = 1000L
-        private const val HEALTH_CHECK_MS = 10_000L
+        private const val HEALTH_CHECK_MS = 15_000L
         const val ACTION_REFRESH_NOTIF = "com.clipsync.REFRESH_NOTIF"
 
         private val _serviceState = MutableStateFlow<ServiceState>(ServiceState.Disconnected)
