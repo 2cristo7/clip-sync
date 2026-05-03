@@ -41,7 +41,7 @@ struct TailscaleHelper {
         debugLog("stderr=\(statusErr ?? "nil")")
         debugLog("stdout prefix=\(String((statusOut ?? "").prefix(300)))")
 
-        if isDaemonError(stderr: statusErr, exitCode: statusCode) {
+        if isDaemonError(stdout: statusOut, stderr: statusErr, exitCode: statusCode) {
             debugLog("isDaemonError=true")
             return .daemonDown
         }
@@ -108,7 +108,13 @@ struct TailscaleHelper {
         return nil
     }
 
-    private static func isDaemonError(stderr: String?, exitCode: Int32) -> Bool {
+    private static func isDaemonError(stdout: String?, stderr: String?, exitCode: Int32) -> Bool {
+        if let out = stdout {
+            let lower = out.lowercased()
+            if lower.contains("clierror") || lower.contains("gui failed to start") || lower.contains("failed to start") {
+                return true
+            }
+        }
         guard exitCode != 0 else { return false }
         guard let err = stderr else { return exitCode == 3 }
         let lower = err.lowercased()
