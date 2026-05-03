@@ -13,7 +13,7 @@ class ClipPayloadTest {
             type = "text",
             mime = "text/plain",
             data = "aGVsbG8=",
-            ts = System.currentTimeMillis() / 1000L,
+            ts = System.currentTimeMillis(),
             nonce = "n-123"
         )
         val parsed = ClipPayload.fromJson(p.toJson())
@@ -22,7 +22,7 @@ class ClipPayloadTest {
 
     @Test
     fun toJson_contains_all_fields() {
-        val now = System.currentTimeMillis() / 1000L
+        val now = System.currentTimeMillis()
         val p = ClipPayload("image", "image/png", "ZGF0YQ==", now, "abc")
         val o = JSONObject(p.toJson())
         assertEquals("image", o.getString("type"))
@@ -34,7 +34,7 @@ class ClipPayloadTest {
 
     @Test
     fun fromJson_parses_server_like_frame() {
-        val now = System.currentTimeMillis() / 1000L
+        val now = System.currentTimeMillis()
         val raw = """{"type":"text","mime":"text/plain","data":"aGk=","ts":$now,"nonce":"xyz"}"""
         val p = ClipPayload.fromJson(raw)
         assertNotNull(p)
