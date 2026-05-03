@@ -151,3 +151,44 @@ cp -R mac/build/DerivedData/Build/Products/Release/ClipSync.app /Applications/Cl
 
 - `PairingWindow` is fixed at **380×460** pt (not resizable).
 - The QR code is generated once in `onAppear` and cached in `@State` — do not recompute on every render.
+
+---
+
+# Wire Protocol Invariants (DO NOT VIOLATE)
+
+## Two distinct timestamp units — never confuse them
+
+| Field | Unit | Where |
+|-------|------|-------|
+| `ClipPayload.ts` | **milliseconds** | JSON body of `/inject` and WS frames |
+| HMAC `t=` in `X-ClipSync-Signature` header | **seconds** | only the HMAC header |
+
+- Mac is canonical: `ts = Int64(Date().timeIntervalSince1970 * 1000)`. Mac validates `abs(now_ms - ts) < 5*60*1000`.
+- Android must build `ts = System.currentTimeMillis()` (NEVER `/1000L`). Android validate uses `nowMs` and `5*60*1000` window.
+- HMAC header: `ClipSender` passes `clockMs / 1000L` to `HmacSigner.signatureHeader(secret, timestampSec, body)`. Mac `HMACValidator` skew is 60s. Keep seconds for HMAC only.
+- Symptom of confusion: Android logs `[WS] error … bad frame: Timestamp out of range` (Mac→Android decode), or Mac `/inject` returns HTTP 500 with `timestampOutOfRange` (Android→Mac).
+
+## Server error mapping
+- `ClipServer` `/inject` MUST wrap `JSONDecoder.decode` + `payload.validate()` in `do/catch` and `throw HTTPError(.badRequest, ...)`. Otherwise Hummingbird converts uncaught Swift errors to 500 and clients can't show useful messages.
+
+---
+
+# Android Foreground Service Rules (Android 12+)
+
+- `ClipForegroundService` must **stay foreground for its entire lifetime**. Calling `startForeground()` from a WS/network callback after a previous `stopForeground(true)` throws `ForegroundServiceStartNotAllowedException` ("Service.startForeground() not allowed due to mAllowStartForeground false") — causes a tight WS-error → reconnect loop.
+- DO NOT call `stopForeground(true)` on WS close/error. Update the existing notification text via `NotificationManager.notify(NOTIF_ID, buildNotification(...))` instead — use the `updateNotification()` helper.
+- `startForeground()` is only safe inside `onCreate` / `onStartCommand` (allowed window opened by `startForegroundService()`).
+
+---
+
+# Coroutine Cancellation Rule
+
+- `catch (t: Throwable)` around a `Flow.collect { }` (or any suspending block) MUST first rethrow `CancellationException`, otherwise legitimate cancellations (job restart, viewmodel clear, network change) surface to the user as fake error toasts (`StandaloneCoroutine was cancelled`). Pattern:
+
+```kotlin
+} catch (t: CancellationException) {
+    throw t
+} catch (t: Throwable) {
+    // real error handling
+}
+```
