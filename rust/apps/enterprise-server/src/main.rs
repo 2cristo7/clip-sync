@@ -1,28 +1,24 @@
 mod cli;
 mod config;
 mod registry;
+mod ws_handler;
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use axum::body::Bytes;
-use axum::extract::ws::{Message, WebSocket};
 use axum::extract::{State, WebSocketUpgrade};
 use axum::response::IntoResponse;
 use axum::routing::get;
 use axum::Json;
 use clap::Parser;
-use futures::{SinkExt, StreamExt};
 use serde::Serialize;
 use tokio::sync::{mpsc, RwLock};
 use tracing::{error, info, warn};
 
 use clipsync_crypto::tls::{TlsIdentity, TlsPaths};
 use clipsync_protocol::config::VERSION;
-use clipsync_protocol::protocol::ClipPayload;
-use clipsync_transport::config::WS_PING_INTERVAL;
 
 use crate::cli::Cli;
 use crate::config::AppConfig;
@@ -121,70 +117,7 @@ async fn ws_upgrade(
     State(state): State<Arc<AppState>>,
     ws: WebSocketUpgrade,
 ) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_ws(socket, state))
-}
-
-async fn handle_ws(socket: WebSocket, state: Arc<AppState>) {
-    let (mut ws_tx, mut ws_rx) = socket.split();
-    let (tx, mut rx) = mpsc::unbounded_channel::<String>();
-
-    let client_id = state.ws_hub.register("enterprise-client".to_string(), tx).await;
-    info!(client_id = %client_id, "ws client connected");
-
-    let send_task = tokio::spawn(async move {
-        let mut ping_ticker = tokio::time::interval(WS_PING_INTERVAL);
-        ping_ticker.tick().await; // skip immediate first tick
-        loop {
-            tokio::select! {
-                maybe_msg = rx.recv() => {
-                    match maybe_msg {
-                        Some(msg) => {
-                            if ws_tx.send(Message::Text(msg.into())).await.is_err() {
-                                break;
-                            }
-                        }
-                        None => break,
-                    }
-                }
-                _ = ping_ticker.tick() => {
-                    if ws_tx.send(Message::Ping(Bytes::new())).await.is_err() {
-                        break;
-                    }
-                }
-            }
-        }
-    });
-
-    let cid = client_id.clone();
-    let state_clone = state.clone();
-    let recv_task = tokio::spawn(async move {
-        while let Some(Ok(msg)) = ws_rx.next().await {
-            match msg {
-                Message::Text(text) => {
-                    if let Ok(payload) = serde_json::from_str::<ClipPayload>(&text) {
-                        let json = match serde_json::to_string(&payload) {
-                            Ok(j) => j,
-                            Err(e) => {
-                                warn!(error = %e, "failed to re-serialize payload");
-                                continue;
-                            }
-                        };
-                        state_clone.ws_hub.broadcast(&json, Some(&cid)).await;
-                    }
-                }
-                Message::Close(_) => break,
-                _ => {}
-            }
-        }
-    });
-
-    tokio::select! {
-        _ = send_task => {}
-        _ = recv_task => {}
-    }
-
-    state.ws_hub.unregister(&client_id).await;
-    info!(client_id = %client_id, "ws client disconnected");
+    ws.on_upgrade(move |socket| ws_handler::handle_ws(socket, state))
 }
 
 // ---------------------------------------------------------------------------
