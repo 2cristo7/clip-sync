@@ -132,6 +132,9 @@ pub async fn handle_ws(socket: WebSocket, state: Arc<AppState>) {
         .await;
     info!(client_id = %client_id, device = %device_label, "ws client registered");
 
+    // Deliver any pending broadcasts queued while this device was offline
+    state.ws_hub.deliver_pending_to_device(&device_label).await;
+
     // If we captured a first payload from a legacy client, broadcast it now
     if let Some(payload) = first_payload {
         if let Ok(json) = serde_json::to_string(&payload) {
@@ -180,6 +183,28 @@ pub async fn handle_ws(socket: WebSocket, state: Arc<AppState>) {
         while let Some(Ok(msg)) = ws_rx.next().await {
             match msg {
                 Message::Text(text) => {
+                    // Check if this is a BroadcastFile frame forwarded via WS
+                    if let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) {
+                        if value.get("type").and_then(|v| v.as_str()) == Some("BroadcastFile") {
+                            // BroadcastFile frames from clients are forwarded
+                            // to their target_device_ids (server-side relay)
+                            if let Some(targets) = value
+                                .get("target_device_ids")
+                                .and_then(|v| v.as_array())
+                            {
+                                let target_ids: Vec<String> = targets
+                                    .iter()
+                                    .filter_map(|v| v.as_str().map(String::from))
+                                    .collect();
+                                state_clone
+                                    .ws_hub
+                                    .send_to_devices(&target_ids, &text)
+                                    .await;
+                            }
+                            continue;
+                        }
+                    }
+
                     if let Ok(payload) = serde_json::from_str::<ClipPayload>(&text) {
                         // Policy: check if this device can push
                         if !state_clone.policy_runtime.can_push(&device_label_clone).await {

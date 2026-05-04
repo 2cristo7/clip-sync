@@ -2,6 +2,7 @@ mod cli;
 mod config;
 mod policy_runtime;
 mod registry;
+mod routes;
 mod ws_handler;
 
 use std::collections::HashMap;
@@ -11,7 +12,7 @@ use std::time::Duration;
 
 use axum::extract::{Path, State, WebSocketUpgrade};
 use axum::response::IntoResponse;
-use axum::routing::{get, put};
+use axum::routing::{get, post, put};
 use axum::Json;
 use clap::Parser;
 use serde::{Deserialize, Serialize};
@@ -36,9 +37,13 @@ struct WsClient {
     tx: mpsc::UnboundedSender<String>,
 }
 
+use crate::routes::broadcast::{DeliveryState, DeviceDeliveryStatus, PendingBroadcast};
+
 #[derive(Default)]
 struct WsHub {
     clients: RwLock<HashMap<String, WsClient>>,
+    /// Pending broadcasts awaiting offline clients (within 1h window).
+    pending_broadcasts: RwLock<Vec<PendingBroadcast>>,
 }
 
 impl WsHub {
@@ -120,6 +125,126 @@ impl WsHub {
     async fn client_count(&self) -> usize {
         self.clients.read().await.len()
     }
+
+    /// Send a WS message to specific device IDs. Returns per-device delivery status.
+    async fn send_to_devices(
+        &self,
+        device_ids: &[String],
+        json: &str,
+    ) -> Vec<DeviceDeliveryStatus> {
+        let clients = self.clients.read().await;
+        let mut results = Vec::with_capacity(device_ids.len());
+
+        for target_id in device_ids {
+            // Find a client whose device label matches
+            let sent = clients
+                .values()
+                .filter(|c| &c.device == target_id)
+                .any(|c| c.tx.send(json.to_string()).is_ok());
+
+            results.push(DeviceDeliveryStatus {
+                device_id: target_id.clone(),
+                status: if sent {
+                    DeliveryState::Delivered
+                } else {
+                    DeliveryState::Pending
+                },
+            });
+        }
+
+        results
+    }
+
+    /// Send a WS message to a single device (best-effort, no status return).
+    async fn send_to_device(&self, device_id: &str, json: &str) {
+        let clients = self.clients.read().await;
+        for client in clients.values() {
+            if client.device == device_id {
+                let _ = client.tx.send(json.to_string());
+            }
+        }
+    }
+
+    /// Queue a pending broadcast for offline delivery.
+    async fn queue_pending_broadcast(&self, pb: PendingBroadcast) {
+        self.pending_broadcasts.write().await.push(pb);
+    }
+
+    /// Remove expired pending broadcasts (older than 1 hour).
+    async fn expire_pending_broadcasts(&self) {
+        let mut pending = self.pending_broadcasts.write().await;
+        let before = pending.len();
+        pending.retain(|pb| !pb.is_expired());
+        let removed = before - pending.len();
+        if removed > 0 {
+            info!(removed = removed, "expired pending broadcasts cleaned up");
+        }
+    }
+
+    /// Deliver any pending broadcasts to a device that just reconnected.
+    async fn deliver_pending_to_device(&self, device_id: &str) {
+        let mut pending = self.pending_broadcasts.write().await;
+        let mut fully_delivered = Vec::new();
+
+        for (idx, pb) in pending.iter_mut().enumerate() {
+            if pb.is_expired() {
+                continue;
+            }
+            if !pb.target_device_ids.contains(&device_id.to_string()) {
+                continue;
+            }
+            if pb.delivered_to.contains(&device_id.to_string()) {
+                continue;
+            }
+
+            // Try to deliver
+            let clients = self.clients.read().await;
+            let sent = clients
+                .values()
+                .filter(|c| c.device == device_id)
+                .any(|c| c.tx.send(pb.to_ws_frame_json()).is_ok());
+            drop(clients);
+
+            if sent {
+                pb.delivered_to.push(device_id.to_string());
+                info!(
+                    broadcast_id = %pb.id,
+                    device_id = %device_id,
+                    "delivered pending broadcast on reconnect"
+                );
+
+                // Emit delivery status update
+                let status_event = serde_json::json!({
+                    "type": "BroadcastStatus",
+                    "broadcast_id": pb.id,
+                    "delivery_status": [{
+                        "device_id": device_id,
+                        "status": "delivered",
+                    }],
+                });
+                let clients = self.clients.read().await;
+                for client in clients.values() {
+                    if client.device == pb.sender_device_id {
+                        let _ = client.tx.send(status_event.to_string());
+                    }
+                }
+
+                // Check if all targets delivered
+                if pb
+                    .target_device_ids
+                    .iter()
+                    .all(|t| pb.delivered_to.contains(t))
+                {
+                    fully_delivered.push(idx);
+                }
+            }
+        }
+
+        // Remove fully-delivered broadcasts (in reverse to preserve indices)
+        for idx in fully_delivered.into_iter().rev() {
+            pending.remove(idx);
+        }
+    }
 }
 
 pub(crate) struct AppState {
@@ -127,6 +252,13 @@ pub(crate) struct AppState {
     tls_identity: TlsIdentity,
     registry: DeviceRegistry,
     policy_runtime: PolicyRuntime,
+    data_dir: std::path::PathBuf,
+}
+
+impl AppState {
+    pub(crate) fn data_dir(&self) -> &std::path::Path {
+        &self.data_dir
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -238,9 +370,13 @@ async fn main() {
         "ClipSync Enterprise Server starting"
     );
 
-    // Ensure data directory exists
+    // Ensure data directory and broadcasts sub-directory exist
     if let Err(e) = std::fs::create_dir_all(&cfg.data_dir) {
         error!(error = %e, "failed to create data directory");
+        std::process::exit(1);
+    }
+    if let Err(e) = std::fs::create_dir_all(cfg.data_dir.join("broadcasts")) {
+        error!(error = %e, "failed to create broadcasts directory");
         std::process::exit(1);
     }
 
@@ -293,12 +429,39 @@ async fn main() {
         tls_identity,
         registry,
         policy_runtime,
+        data_dir: cfg.data_dir.clone(),
     });
+
+    // Spawn background task to expire old broadcasts
+    {
+        let hub = state.clone();
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(300));
+            loop {
+                interval.tick().await;
+                hub.ws_hub.expire_pending_broadcasts().await;
+                // Clean up expired files on disk
+                let dir = hub.data_dir().join("broadcasts");
+                if let Ok(mut entries) = tokio::fs::read_dir(&dir).await {
+                    while let Ok(Some(entry)) = entries.next_entry().await {
+                        if let Ok(meta) = entry.metadata().await {
+                            if let Ok(modified) = meta.modified() {
+                                if modified.elapsed().unwrap_or_default().as_secs() >= 3600 {
+                                    let _ = tokio::fs::remove_file(entry.path()).await;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
 
     let app = axum::Router::new()
         .route("/health", get(health))
         .route("/ws", get(ws_upgrade))
         .route("/devices/{id}/policy", put(update_device_policy))
+        .route("/broadcast", post(routes::broadcast::post_broadcast))
         .with_state(state.clone());
 
     let addr = SocketAddr::from((cfg.bind, cfg.port));
