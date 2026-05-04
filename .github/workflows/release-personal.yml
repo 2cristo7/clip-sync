@@ -1,0 +1,83 @@
+name: Release Personal
+
+on:
+  push:
+    tags:
+      - 'personal-v*'
+
+concurrency:
+  group: release-personal-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-and-release:
+    name: Build (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux
+          - os: windows-latest
+            target: windows
+          - os: macos-14
+            target: macos-arm64
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: rust/apps/personal-desktop/frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: rust/apps/personal-desktop/frontend
+        run: npm ci
+
+      - name: Install Linux dependencies
+        if: matrix.target == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libxcb-shape0-dev \
+            libxcb-xfixes0-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            libxdo-dev \
+            libwebkit2gtk-4.1-dev \
+            libjavascriptcoregtk-4.1-dev \
+            libsoup-3.0-dev
+
+      - name: Extract version from tag
+        id: version
+        shell: bash
+        run: echo "version=${GITHUB_REF_NAME#personal-v}" >> "$GITHUB_OUTPUT"
+
+      - name: Build with Tauri
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: rust/apps/personal-desktop
+          tagName: ${{ github.ref_name }}
+          releaseName: "Personal v${{ steps.version.outputs.version }}"
+          releaseDraft: true
+          prerelease: false
+
+      - name: Ad-hoc codesign (macOS)
+        if: matrix.target == 'macos-arm64'
+        run: |
+          find rust/apps/personal-desktop/target/release/bundle -name "*.app" -exec codesign --force --deep --sign - {} \;
