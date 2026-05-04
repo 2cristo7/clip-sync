@@ -1,0 +1,136 @@
+name: Release Enterprise
+
+on:
+  push:
+    tags: ['enterprise-v*']
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+          - os: windows-latest
+            platform: windows
+          - os: macos-14
+            platform: macos
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Cache npm (desktop)
+        uses: actions/cache@v4
+        with:
+          path: rust/apps/enterprise-desktop/frontend/node_modules
+          key: npm-desktop-${{ runner.os }}-${{ hashFiles('rust/apps/enterprise-desktop/frontend/package-lock.json') }}
+
+      - name: Cache npm (client)
+        uses: actions/cache@v4
+        with:
+          path: rust/apps/enterprise-client/frontend/node_modules
+          key: npm-client-${{ runner.os }}-${{ hashFiles('rust/apps/enterprise-client/frontend/package-lock.json') }}
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libxcb-shape0-dev \
+            libxcb-xfixes0-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            libxdo-dev \
+            libwebkit2gtk-4.1-dev \
+            librsvg2-dev
+
+      - name: Install frontend dependencies (desktop)
+        run: |
+          cd rust/apps/enterprise-desktop/frontend
+          npm ci
+
+      - name: Install frontend dependencies (client)
+        run: |
+          cd rust/apps/enterprise-client/frontend
+          npm ci
+
+      # --- Server build ---
+      - name: Build server
+        run: cargo build --release --manifest-path rust/Cargo.toml -p enterprise-server
+
+      - name: Package server (Linux)
+        if: matrix.platform == 'linux'
+        run: |
+          mkdir -p dist
+          tar czf dist/enterprise-server-linux-x64.tar.gz -C rust/target/release enterprise-server
+
+      - name: Package server (macOS)
+        if: matrix.platform == 'macos'
+        run: |
+          mkdir -p dist
+          tar czf dist/enterprise-server-macos-arm64.tar.gz -C rust/target/release enterprise-server
+
+      - name: Package server (Windows)
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist
+          Compress-Archive -Path rust\target\release\enterprise-server.exe -DestinationPath dist\enterprise-server-windows-x64.zip
+
+      # --- Tauri desktop build ---
+      - name: Build Tauri desktop
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: rust/apps/enterprise-desktop
+          tauriScript: cargo tauri
+          tagName: ${{ github.ref_name }}
+          releaseName: "Enterprise ${{ github.ref_name }}"
+          releaseDraft: true
+          prerelease: false
+          args: --config src-tauri/tauri.conf.json
+
+      # --- Tauri client build ---
+      - name: Build Tauri client
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: rust/apps/enterprise-client
+          tauriScript: cargo tauri
+          tagName: ${{ github.ref_name }}
+          releaseName: "Enterprise ${{ github.ref_name }}"
+          releaseDraft: true
+          prerelease: false
+          args: --config src-tauri/tauri.conf.json
+
+      # --- Upload server artifacts ---
+      - name: Upload server artifacts
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "Enterprise ${{ github.ref_name }}"
+          draft: true
+          files: dist/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
