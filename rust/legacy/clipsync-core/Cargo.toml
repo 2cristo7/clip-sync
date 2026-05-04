@@ -1,0 +1,22 @@
+[package]
+name = "clipsync-core"
+version = "0.1.0"
+edition = "2021"
+
+# Transitional shell crate (Phase 1.9). The real code lives in
+# `clipsync-protocol`, `clipsync-crypto`, `clipsync-transport` and
+# `clipsync-clipboard`; this crate only re-exports their public API
+# under the legacy `clipsync_core::*` paths so the still-living
+# `clipsync-server` / `clipsync-client` crates compile unchanged. New
+# code must import from the focused crates directly.
+
+[dependencies]
+clipsync-protocol = { path = "../../crates/clipsync-protocol" }
+clipsync-crypto = { path = "../../crates/clipsync-crypto" }
+clipsync-transport = { path = "../../crates/clipsync-transport" }
+clipsync-clipboard = { path = "../../crates/clipsync-clipboard" }
+
+[dev-dependencies]
+serde_json = "1"
+hex = "0.4"
+base64 = "0.22"

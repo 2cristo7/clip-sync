@@ -1,0 +1,12 @@
+[package]
+name = "clipsync-transport"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clipsync-protocol = { path = "../clipsync-protocol" }
+mdns-sd = "0.11"
+thiserror = "2"
+tracing = "0.1"
+
+[dev-dependencies]

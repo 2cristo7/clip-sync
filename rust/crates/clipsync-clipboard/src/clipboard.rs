@@ -1,8 +1,8 @@
 use std::sync::{Arc, Mutex};
 
-use crate::protocol::{ClipPayload, ClipType};
 use base64::engine::general_purpose::STANDARD as BASE64;
 use base64::Engine;
+use clipsync_protocol::protocol::{ClipPayload, ClipType};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
@@ -435,7 +435,7 @@ fn file_payload_from_path(path: &std::path::Path) -> Result<Option<ClipPayload>,
         .map_err(|e| ClipboardError::AccessFailed(format!("file metadata: {e}")))?;
 
     // Enforce 20 MB max
-    if metadata.len() > crate::config::MAX_PAYLOAD_BYTES as u64 {
+    if metadata.len() > clipsync_protocol::config::MAX_PAYLOAD_BYTES as u64 {
         tracing::warn!(
             "Skipping file {} ({} bytes) — exceeds max payload size",
             path.display(),
