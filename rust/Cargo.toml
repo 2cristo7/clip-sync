@@ -7,6 +7,8 @@ members = [
     "crates/clipsync-transport",
     "crates/clipsync-clipboard",
     "crates/clipsync-platform",
+    # Enterprise storage crate (Phase 2.2).
+    "crates/clipsync-storage",
     # Enterprise binary crate (Phase 2.1).
     "apps/enterprise-server",
     # Legacy crates kept as transitional re-export shells until the

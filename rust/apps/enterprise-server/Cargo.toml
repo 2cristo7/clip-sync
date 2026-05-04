@@ -11,6 +11,7 @@ path = "src/main.rs"
 clipsync-protocol = { path = "../../crates/clipsync-protocol" }
 clipsync-crypto = { path = "../../crates/clipsync-crypto" }
 clipsync-transport = { path = "../../crates/clipsync-transport" }
+clipsync-storage = { path = "../../crates/clipsync-storage" }
 
 axum = { version = "0.8", features = ["ws"] }
 tokio = { version = "1", features = ["full"] }

@@ -1,5 +1,6 @@
 mod cli;
 mod config;
+mod registry;
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -25,6 +26,7 @@ use clipsync_transport::config::WS_PING_INTERVAL;
 
 use crate::cli::Cli;
 use crate::config::AppConfig;
+use crate::registry::DeviceRegistry;
 
 // ---------------------------------------------------------------------------
 // Application state
@@ -88,6 +90,8 @@ impl WsHub {
 struct AppState {
     ws_hub: WsHub,
     tls_identity: TlsIdentity,
+    #[allow(dead_code)]
+    registry: DeviceRegistry,
 }
 
 // ---------------------------------------------------------------------------
@@ -222,6 +226,15 @@ async fn main() {
         std::process::exit(1);
     }
 
+    // Device registry (SQLite)
+    let registry = match DeviceRegistry::init(&cfg.data_dir).await {
+        Ok(r) => r,
+        Err(e) => {
+            error!(error = %e, "failed to initialise device registry");
+            std::process::exit(1);
+        }
+    };
+
     // TLS identity
     let tls_paths = TlsPaths {
         cert_der: cfg.data_dir.join("cert.der"),
@@ -256,6 +269,7 @@ async fn main() {
     let state = Arc::new(AppState {
         ws_hub: WsHub::default(),
         tls_identity,
+        registry,
     });
 
     let app = axum::Router::new()
