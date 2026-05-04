@@ -1,0 +1,30 @@
+[Unit]
+Description=ClipSync Enterprise Server — headless clipboard sync daemon
+Documentation=https://github.com/2cristo7/clip-sync
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/enterprise-server --config /etc/clipsync/enterprise.toml
+Restart=on-failure
+RestartSec=5
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/clipsync
+PrivateTmp=yes
+
+# Logging — structured JSON goes to stdout, journald captures it
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=clipsync-enterprise
+
+# Graceful shutdown: SIGTERM with 15s grace period (server drains in 10s)
+TimeoutStopSec=15
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=multi-user.target
