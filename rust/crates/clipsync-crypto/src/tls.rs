@@ -8,7 +8,7 @@ use rcgen::{CertificateParams, DistinguishedName, DnType, IsCa, KeyPair, SanType
 use rustls::pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer};
 use thiserror::Error;
 
-use crate::config::TLS_CERT_VALIDITY_DAYS;
+use clipsync_protocol::config::TLS_CERT_VALIDITY_DAYS;
 
 #[derive(Debug, Error)]
 pub enum TlsError {

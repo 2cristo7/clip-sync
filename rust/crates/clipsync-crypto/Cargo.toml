@@ -1,0 +1,23 @@
+[package]
+name = "clipsync-crypto"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clipsync-protocol = { path = "../clipsync-protocol" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+hmac = "0.12"
+sha2 = "0.10"
+hex = "0.4"
+rcgen = { version = "0.13", features = ["x509-parser"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "logging", "std", "tls12"] }
+rustls-pemfile = "2"
+x509-parser = "0.16"
+data-encoding = "2"
+pem = "3"
+dirs = "6"
+time = "0.3"
+thiserror = "2"
+
+[dev-dependencies]

@@ -1,7 +1,16 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/clipsync-core",
-    "crates/clipsync-server",
-    "crates/clipsync-client",
+    # New focused crates (Phase 1.9 split).
+    "crates/clipsync-protocol",
+    "crates/clipsync-crypto",
+    "crates/clipsync-transport",
+    "crates/clipsync-clipboard",
+    "crates/clipsync-platform",
+    # Legacy crates kept as transitional re-export shells until the
+    # `apps/` desktop shells land. Source moved physically under
+    # `legacy/` to make their pending removal obvious.
+    "legacy/clipsync-core",
+    "legacy/clipsync-server",
+    "legacy/clipsync-client",
 ]

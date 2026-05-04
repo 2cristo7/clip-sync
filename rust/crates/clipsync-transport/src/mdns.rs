@@ -4,7 +4,7 @@ use std::time::Duration;
 use mdns_sd::{ServiceDaemon, ServiceEvent, ServiceInfo};
 use thiserror::Error;
 
-use crate::config::{MDNS_SERVICE_TYPE, VERSION};
+use clipsync_protocol::config::{MDNS_SERVICE_TYPE, VERSION};
 
 #[derive(Debug, Error)]
 pub enum MdnsError {
@@ -146,7 +146,11 @@ mod tests {
     // it doesn't error on construction.
     #[test]
     fn advertise_creates_guard() {
-        let result = advertise(crate::config::PORT, "test-host", "fake-fingerprint");
+        let result = advertise(
+            clipsync_protocol::config::PORT,
+            "test-host",
+            "fake-fingerprint",
+        );
         // On CI without multicast, this may fail — that's acceptable
         if let Ok(guard) = result {
             drop(guard); // should unregister cleanly

@@ -1,25 +1,15 @@
+//! WebSocket / healthcheck connection-tuning constants.
+//!
+//! These four values must mirror the Mac/Android values committed in
+//! `fc9b1d38` ("fix[connection]: reduce ping interval 30s→5s,
+//! readTimeout 60s→15s, health check 15s→10s, failures 3→2"). Both
+//! the server WS hub (ping loop) and the client connector (read
+//! timeout + healthcheck poll + consecutive-failure threshold) import
+//! from here. Drift between client and server tuning was the original
+//! bug that caused stuck-but-alive WebSockets on flaky LAN/Tailscale
+//! links — see `docs/plans/master-plan-rust-fork.md` Phase 1.7.
+
 use std::time::Duration;
-
-pub const PORT: u16 = 7010;
-pub const VERSION: &str = "0.1.0";
-pub const MAX_PAYLOAD_BYTES: usize = 20 * 1024 * 1024;
-pub const HMAC_MAX_SKEW_SECS: i64 = 60;
-pub const PAIRING_CODE_TTL_SECS: u64 = 120;
-pub const TLS_CERT_VALIDITY_DAYS: u32 = 365;
-pub const MDNS_SERVICE_TYPE: &str = "_clipsync._tcp.local.";
-pub const CLIPBOARD_POLL_MS: u64 = 500;
-
-// --- Connection tuning ---
-//
-// These four constants must mirror the Mac/Android values committed in
-// `fc9b1d38` ("fix[connection]: reduce ping interval 30s→5s, readTimeout
-// 60s→15s, health check 15s→10s, failures 3→2"). Keeping them in this
-// shared module is the single source of truth: both `clipsync-server`
-// (WS hub ping loop) and `clipsync-client` (connector read timeout +
-// healthcheck poll) import from here. Do not duplicate these values in
-// either crate — drift between client and server tuning was the original
-// bug that caused stuck-but-alive WebSockets on flaky LAN/Tailscale
-// links. See `docs/plans/master-plan-rust-fork.md` Phase 1.7.
 
 /// Interval at which the server sends WebSocket Ping frames to each
 /// connected client. Mirrors Mac `WebSocketHub.swift` parity commit
