@@ -23,9 +23,6 @@ struct TailscaleSetupView: View {
         .padding(28)
         .frame(width: 380, height: 380)
         .onAppear { refresh() }
-        .onReceive(Timer.publish(every: 5, on: .main, in: .common).autoconnect()) { _ in
-            refresh()
-        }
     }
 
     private func installedView(ip: String) -> some View {
@@ -72,7 +69,7 @@ struct TailscaleSetupView: View {
                 .foregroundStyle(.orange)
             Text("Tailscale VPN not connected")
                 .font(.headline)
-            Text("Tailscale is installed but the VPN is not active.\nOpen Tailscale and connect to get your Tailscale IP.")
+            Text("Tailscale is installed but the VPN is not active.\nConnect to the VPN to get your Tailscale IP.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -85,9 +82,12 @@ struct TailscaleSetupView: View {
                 Button("Refresh") { refresh() }
                     .buttonStyle(.bordered)
             }
-            Text("Will reconnect automatically once VPN is active.")
+            Text("The view will refresh automatically once connected.")
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
+        }
+        .onReceive(Timer.publish(every: 3, on: .main, in: .common).autoconnect()) { _ in
+            refresh()
         }
     }
 
