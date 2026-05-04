@@ -2,6 +2,7 @@ import { Routes, Route } from "react-router-dom";
 import Home from "./pages/Home";
 import Onboarding from "./pages/Onboarding";
 import Advanced from "./pages/Advanced";
+import Pairing from "./pages/Pairing";
 
 function App() {
   return (
@@ -9,6 +10,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/onboarding" element={<Onboarding />} />
+        <Route path="/pairing" element={<Pairing />} />
         <Route path="/advanced" element={<Advanced />} />
       </Routes>
     </div>
