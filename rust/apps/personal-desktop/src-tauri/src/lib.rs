@@ -2,10 +2,14 @@
 
 pub mod discovery;
 pub mod mesh_hub;
+pub mod notifications;
+pub mod pairing;
 pub mod peer_link;
+pub mod tray;
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use uuid::Uuid;
 
@@ -45,8 +49,33 @@ fn greet(name: &str) -> String {
 }
 
 pub fn run() {
+    let cfg_path = config_dir();
+    let device_id = load_or_create_device_id(&cfg_path);
+    let hostname = local_hostname();
+
+    let pairing_mgr = Arc::new(pairing::PairingManager::new(
+        device_id,
+        hostname,
+        &cfg_path,
+    ));
+
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![greet])
+        .manage(pairing_mgr as pairing::PairingState_)
+        .invoke_handler(tauri::generate_handler![
+            greet,
+            tray::get_sync_status,
+            tray::cmd_toggle_pause,
+            tray::show_window,
+            pairing::get_discovered_peers,
+            pairing::initiate_pairing,
+            pairing::confirm_pairing,
+            pairing::get_paired_peers,
+            pairing::add_manual_peer,
+        ])
+        .setup(|app| {
+            tray::init_tray(app.handle())?;
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
