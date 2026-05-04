@@ -231,6 +231,8 @@ impl ClipboardProvider for SystemClipboard {
                     ts: Self::now_ts(),
                     nonce: uuid::Uuid::new_v4().to_string(),
                     name: None,
+                    policy: None,
+                    origin_role: None,
                 }));
             }
         }
@@ -254,6 +256,8 @@ impl ClipboardProvider for SystemClipboard {
                     ts: Self::now_ts(),
                     nonce: uuid::Uuid::new_v4().to_string(),
                     name: None,
+                    policy: None,
+                    origin_role: None,
                 }));
             }
         }
@@ -467,6 +471,8 @@ fn file_payload_from_path(path: &std::path::Path) -> Result<Option<ClipPayload>,
         ts,
         nonce: uuid::Uuid::new_v4().to_string(),
         name: Some(filename),
+        policy: None,
+        origin_role: None,
     }))
 }
 
@@ -917,6 +923,8 @@ mod tests {
             ts: 1714000000,
             nonce: "test-nonce".to_string(),
             name: Some("doc.pdf".to_string()),
+            policy: None,
+            origin_role: None,
         };
         assert_eq!(payload.clip_type, ClipType::File);
         assert_eq!(payload.name, Some("doc.pdf".to_string()));
