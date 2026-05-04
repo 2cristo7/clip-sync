@@ -1,10 +1,12 @@
 //! ClipSync Personal Desktop — Tauri 2 library crate.
 
+pub mod broadcast;
 pub mod discovery;
 pub mod mesh_hub;
 pub mod notifications;
 pub mod pairing;
 pub mod peer_link;
+pub mod settings;
 pub mod tray;
 
 use std::fs;
@@ -59,8 +61,11 @@ pub fn run() {
         &cfg_path,
     ));
 
+    let settings_state = settings::init_settings_state();
+
     tauri::Builder::default()
         .manage(pairing_mgr as pairing::PairingState_)
+        .manage(settings_state)
         .invoke_handler(tauri::generate_handler![
             greet,
             tray::get_sync_status,
@@ -71,6 +76,14 @@ pub fn run() {
             pairing::confirm_pairing,
             pairing::get_paired_peers,
             pairing::add_manual_peer,
+            settings::get_settings,
+            settings::update_setting,
+            settings::reset_all,
+            settings::get_debug_log,
+            broadcast::send_file,
+            broadcast::get_received_files,
+            broadcast::reveal_file,
+            broadcast::save_file,
         ])
         .setup(|app| {
             tray::init_tray(app.handle())?;
