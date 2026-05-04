@@ -91,6 +91,89 @@ fn compat_payload_v1_decodes_with_ms_timestamp() {
     payload.validate(payload.ts as i64).unwrap();
 }
 
+/// Phase 1.8: explicitly-named ms-timestamp vector. Same wire bytes as
+/// `payload_v1.json`; this vector is the canonical name introduced to make
+/// the unit (milliseconds) unambiguous in the file name itself.
+#[test]
+fn compat_payload_v1_ms_decodes_with_ms_timestamp() {
+    let raw = include_str!("../../../tests/compat/payload_v1_ms.json");
+    let payload: ClipPayload = serde_json::from_str(raw).unwrap();
+
+    assert_eq!(payload.ts, 1_714_000_000_000);
+    assert!(payload.ts > 1_000_000_000_000);
+
+    let reserialized = serde_json::to_string(&payload).unwrap();
+    assert_eq!(reserialized, raw.trim());
+
+    payload.validate(payload.ts as i64).unwrap();
+
+    // Byte-equality with the legacy filename — the explicit "_ms" name is
+    // a pure alias for clarity; bytes MUST stay identical.
+    let legacy = include_str!("../../../tests/compat/payload_v1.json");
+    assert_eq!(raw, legacy);
+}
+
+/// Phase 1.8: 401 body returned by `/pair?code=<wrong>`.
+///
+/// Wire shape (Phase 1.5): `{"error":"invalid"}` — NO `message` field.
+/// This vector is fully deterministic, so we assert byte-equality after
+/// JSON normalisation.
+#[test]
+fn compat_pairing_error_invalid_shape() {
+    let raw = include_str!("../../../tests/compat/pairing_error_invalid.json");
+    let v: serde_json::Value = serde_json::from_str(raw).unwrap();
+
+    assert_eq!(v["error"], "invalid");
+    assert!(
+        v.get("message").is_none(),
+        "/pair 401 body MUST NOT include a `message` field"
+    );
+
+    // Body has exactly one key.
+    let obj = v.as_object().unwrap();
+    assert_eq!(
+        obj.len(),
+        1,
+        "/pair 401 body must have exactly one key (`error`)"
+    );
+
+    // Round-trip identity: serializing the deserialized form yields the
+    // same canonical bytes axum produces on the wire.
+    let reserialized = serde_json::to_string(&v).unwrap();
+    assert_eq!(reserialized, raw.trim());
+}
+
+/// Phase 1.8: 400 body returned by `POST /inject` when the body fails to
+/// decode as a `ClipPayload`.
+///
+/// Wire shape (Phase 1.3): `{"error":"<code>","message":"<text>"}`.
+/// The `error` code is part of the contract; the exact `message` text is
+/// not — it carries the underlying serde detail, which can vary across
+/// `serde_json` versions. We therefore assert shape (keys + error code +
+/// non-empty message), not byte-equality.
+#[test]
+fn compat_inject_400_decode_shape() {
+    let raw = include_str!("../../../tests/compat/inject_400_decode.json");
+    let v: serde_json::Value = serde_json::from_str(raw).unwrap();
+
+    assert_eq!(v["error"], "decode_error");
+    assert!(v["message"].is_string(), "`message` must be a string");
+    assert!(
+        !v["message"].as_str().unwrap().is_empty(),
+        "`message` must be non-empty"
+    );
+
+    // Body has exactly two keys: error + message.
+    let obj = v.as_object().unwrap();
+    assert_eq!(
+        obj.len(),
+        2,
+        "/inject 4xx body must have exactly `error` + `message`"
+    );
+    assert!(obj.contains_key("error"));
+    assert!(obj.contains_key("message"));
+}
+
 /// Verify ts is Unix **milliseconds** (not seconds).
 ///
 /// ClipPayload.ts is in MILLISECONDS. See CLAUDE.md §"Wire Protocol Invariants".

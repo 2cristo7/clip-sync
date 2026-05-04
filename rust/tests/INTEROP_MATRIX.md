@@ -27,6 +27,10 @@ macOS client) requires two machines on the same LAN or Tailscale network.
    - Golden file deserialization (ClipPayload text, image, pair_response, health)
    - HMAC sign/verify round-trip against golden vector
    - Wire format field completeness (6 fields, correct types)
+   - Cross-platform compat vectors (`rust/tests/compat/`):
+     - `payload_v1.json` / `payload_v1_ms.json` — ClipPayload v1 with ms `ts`
+     - `pairing_error_invalid.json` — `/pair` 401 body shape (`{"error":"invalid"}`)
+     - `inject_400_decode.json` — `/inject` 400 body shape (`{"error":"decode_error","message":"..."}`)
 
 2. **Server endpoint behaviour** (all platforms)
    - `/health` returns `{"ok":true,"version":"0.1.0","platform":"<os>"}`
@@ -138,3 +142,34 @@ Network:    LAN / Tailscale / Mixed
 | TLS fingerprint validation  |      |       |
 | Tray status                 |      |       |
 ```
+
+## Cross-Platform Compat Vectors
+
+Golden vectors live in `rust/tests/compat/` and are byte-equivalent to what the
+Mac Swift implementation emits on the wire. The Mac implementation is the
+canonical source of truth for the wire format; Rust must parse and round-trip
+these vectors unchanged.
+
+### Vector index
+
+| File                                                  | Wire shape                                                                              | Source of truth (Mac/Android)                            |
+|-------------------------------------------------------|------------------------------------------------------------------------------------------|----------------------------------------------------------|
+| `compat/payload_v1.json`                              | `ClipPayload` v1 with `ts` in **ms** (legacy name; kept for back-compat)                | Mac `ClipPayload.swift` post-fix `f615624e`              |
+| `compat/payload_v1_ms.json`                           | Alias of `payload_v1.json` — explicit name introduced in Phase 1.8                       | Mac `ClipPayload.swift` post-fix `f615624e`              |
+| `compat/pairing_error_invalid.json`                   | `/pair` 401 body: `{"error":"invalid"}` (no `message`)                                  | Mac pairing route, Phase 1.5 commits `62ad7bc6` / `b3cc3159` |
+| `compat/inject_400_decode.json`                       | `/inject` 400 body: `{"error":"decode_error","message":"<text>"}`                       | Mac `ClipServer.swift`, Phase 1.3 commit `4f8ab8de`      |
+
+### Wire-shape contracts asserted
+
+- **`ClipPayload.ts`** — Unix milliseconds (`Int64`), never seconds. See
+  CLAUDE.md §"Wire Protocol Invariants".
+- **`/pair` 401** — single-key body `{"error":"<code>"}`; `<code>` is one of
+  `invalid`, `expired`, `consumed`, `notStarted`. No `message` field.
+- **`/inject` 4xx** — two-key body `{"error":"<code>","message":"<text>"}`;
+  `<code>` is one of `decode_error`, `unsupported_kind`,
+  `timestamp_out_of_range`, `payload_too_large`. The `message` text is
+  diagnostic and not part of the wire contract — only the `error` code is.
+
+Each vector ships with an adjacent `.md` sidecar that captures the source
+commit and per-vector invariants. Tests live in
+`rust/crates/clipsync-core/tests/protocol_compat.rs`.
