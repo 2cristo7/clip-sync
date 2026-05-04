@@ -41,6 +41,43 @@ pub enum ClipType {
     File,
 }
 
+/// Logical role of the device emitting / receiving a payload.
+///
+/// Optional metadata used by enterprise deployments that route based on
+/// who-is-who in a session (e.g. "server" canonical store vs. "client"
+/// endpoints, or symmetric "peer" mesh nodes). Personal builds leave
+/// payloads with `origin_role = None`.
+///
+/// Phase 1.10 (extensible protocol): see
+/// `docs/plans/master-plan-rust-fork.md`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum DeviceRole {
+    Server,
+    Client,
+    Peer,
+}
+
+/// Optional broadcast / redaction hints attached to a [`ClipPayload`].
+///
+/// Reserved for enterprise filtering: `redact = true` asks the receiver
+/// to obfuscate sensitive content in audit logs; `broadcast_scope`
+/// narrows fan-out (e.g. `"team"`, `"user"`, `"device"`). Personal
+/// builds always leave this `None` and decoders MUST tolerate unknown
+/// scope strings.
+///
+/// Phase 1.10 (extensible protocol): see
+/// `docs/plans/master-plan-rust-fork.md`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PolicyHints {
+    /// If `true`, audit/log surfaces should redact `data`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub redact: Option<bool>,
+    /// Broadcast scope hint, e.g. `"team"`, `"user"`, `"device"`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub broadcast_scope: Option<String>,
+}
+
 /// Wire-format payload for clipboard synchronization.
 ///
 /// JSON example:
@@ -64,6 +101,19 @@ pub struct ClipPayload {
     pub nonce: String,
     /// File name, or `null` when not a file.
     pub name: Option<String>,
+    /// Optional broadcast / redaction hints. Personal builds leave this
+    /// `None`; enterprise builds may populate it.
+    ///
+    /// Backward-compatible: omitted when serializing if `None`, defaults
+    /// to `None` when missing on the wire.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub policy: Option<PolicyHints>,
+    /// Optional logical role of the originating device.
+    ///
+    /// Backward-compatible: omitted when serializing if `None`, defaults
+    /// to `None` when missing on the wire.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub origin_role: Option<DeviceRole>,
 }
 
 impl ClipPayload {
@@ -88,6 +138,8 @@ impl ClipPayload {
             ts,
             nonce: uuid::Uuid::new_v4().to_string(),
             name: None,
+            policy: None,
+            origin_role: None,
         }
     }
 
@@ -100,6 +152,8 @@ impl ClipPayload {
             ts,
             nonce: uuid::Uuid::new_v4().to_string(),
             name: None,
+            policy: None,
+            origin_role: None,
         }
     }
 
@@ -135,6 +189,8 @@ mod tests {
             ts: 1714000000,
             nonce: "550e8400-e29b-41d4-a716-446655440000".to_string(),
             name: None,
+            policy: None,
+            origin_role: None,
         };
 
         let json = serde_json::to_string(&payload).unwrap();
@@ -151,6 +207,8 @@ mod tests {
             ts: 1714000001,
             nonce: "660e8400-e29b-41d4-a716-446655440001".to_string(),
             name: None,
+            policy: None,
+            origin_role: None,
         };
 
         let json = serde_json::to_string(&payload).unwrap();
@@ -167,6 +225,8 @@ mod tests {
             ts: 1714000002,
             nonce: "770e8400-e29b-41d4-a716-446655440002".to_string(),
             name: Some("document.pdf".to_string()),
+            policy: None,
+            origin_role: None,
         };
 
         let json = serde_json::to_string(&payload).unwrap();
@@ -184,6 +244,8 @@ mod tests {
             ts: 0,
             nonce: "test".to_string(),
             name: None,
+            policy: None,
+            origin_role: None,
         };
         let json = serde_json::to_string(&payload).unwrap();
         assert!(json.contains(r#""type":"text""#));
@@ -198,6 +260,8 @@ mod tests {
             ts: 0,
             nonce: "test".to_string(),
             name: None,
+            policy: None,
+            origin_role: None,
         };
         let json = serde_json::to_string(&payload).unwrap();
         assert!(json.contains(r#""name":null"#));
@@ -247,6 +311,8 @@ mod tests {
             ts: 0,
             nonce: "a".to_string(),
             name: None,
+            policy: None,
+            origin_role: None,
         };
         let p2 = ClipPayload {
             clip_type: ClipType::Image,
@@ -255,6 +321,8 @@ mod tests {
             ts: 999,
             nonce: "b".to_string(),
             name: None,
+            policy: None,
+            origin_role: None,
         };
         // Same data field → same digest
         assert_eq!(p1.digest(), p2.digest());

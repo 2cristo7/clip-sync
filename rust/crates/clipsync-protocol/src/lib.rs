@@ -10,5 +10,6 @@
 //! workspace split rationale.
 
 pub mod config;
+pub mod handshake;
 pub mod pairing;
 pub mod protocol;
