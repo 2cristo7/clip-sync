@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import DeviceCard, { PairedDevice } from "../components/DeviceCard";
+import SendFile, { ConnectedPeer } from "../components/SendFile";
 
 function Home() {
   const navigate = useNavigate();
@@ -54,8 +55,17 @@ function Home() {
     );
   }
 
+  // Build peer list for SendFile component
+  const connectedPeers: ConnectedPeer[] = devices.map((d) => ({
+    device_id: d.device_id,
+    device_name: d.device_name,
+    is_online: d.is_online ?? false,
+  }));
+
   return (
-    <div className="flex flex-col min-h-screen p-6 max-w-md mx-auto">
+    <div className="relative flex flex-col min-h-screen p-6 max-w-md mx-auto">
+      {/* File drop overlay */}
+      <SendFile peers={connectedPeers} />
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-lg font-semibold text-gray-800 dark:text-gray-100">
