@@ -10,7 +10,7 @@ use axum::Json;
 use serde::{Deserialize, Serialize};
 use tower_http::limit::RequestBodyLimitLayer;
 
-use clipsync_core::config::{MAX_PAYLOAD_BYTES, VERSION};
+use clipsync_core::config::{MAX_PAYLOAD_BYTES, VERSION, WS_PING_INTERVAL};
 use clipsync_core::pairing::{create_pair_response, PairingError};
 use clipsync_core::protocol::{unix_millis, ClipPayload};
 
@@ -226,11 +226,32 @@ async fn handle_ws(socket: WebSocket, state: Arc<AppState>, device: String) {
     let client_id = state.ws_hub.register(device.clone(), tx).await;
     tracing::info!("WebSocket connected: {device} ({client_id})");
 
-    // Forward hub messages to WebSocket
+    // Forward hub messages to WebSocket and emit periodic Ping frames so
+    // the client can detect a half-open link via its read timeout. The
+    // ping interval is the single-source-of-truth constant from
+    // `clipsync_core::config` (mirrors Mac fc9b1d38).
     let send_task = tokio::spawn(async move {
-        while let Some(msg) = rx.recv().await {
-            if ws_tx.send(Message::Text(msg.into())).await.is_err() {
-                break;
+        let mut ping_ticker = tokio::time::interval(WS_PING_INTERVAL);
+        // First tick fires immediately; skip it so we don't ping before
+        // the upgrade handshake-side state is fully settled on the wire.
+        ping_ticker.tick().await;
+        loop {
+            tokio::select! {
+                maybe_msg = rx.recv() => {
+                    match maybe_msg {
+                        Some(msg) => {
+                            if ws_tx.send(Message::Text(msg.into())).await.is_err() {
+                                break;
+                            }
+                        }
+                        None => break,
+                    }
+                }
+                _ = ping_ticker.tick() => {
+                    if ws_tx.send(Message::Ping(Bytes::new())).await.is_err() {
+                        break;
+                    }
+                }
             }
         }
     });
