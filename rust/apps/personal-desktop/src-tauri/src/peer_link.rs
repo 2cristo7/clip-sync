@@ -210,11 +210,7 @@ mod tests {
         let (link, handle) = PeerLink::new("test-peer".to_string(), 8);
 
         // Simulate incoming message via handle
-        handle
-            .incoming_tx
-            .send(PeerMessage::Ping)
-            .await
-            .unwrap();
+        handle.incoming_tx.send(PeerMessage::Ping).await.unwrap();
 
         let msg = link.recv().await.unwrap();
         assert!(matches!(msg, PeerMessage::Ping));

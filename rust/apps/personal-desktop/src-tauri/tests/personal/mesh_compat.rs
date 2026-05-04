@@ -48,7 +48,13 @@ async fn mesh_broadcasts_to_android_peer() {
     hub.broadcast(event).await;
 
     // Android peer should receive the broadcast.
-    let msg = android_handle.outgoing_rx.lock().await.recv().await.unwrap();
+    let msg = android_handle
+        .outgoing_rx
+        .lock()
+        .await
+        .recv()
+        .await
+        .unwrap();
     match msg {
         PeerMessage::Clip(ev) => {
             assert_eq!(ev.origin_device_id, "desktop-001");

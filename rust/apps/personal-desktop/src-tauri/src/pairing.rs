@@ -171,15 +171,17 @@ impl PairingManager {
         drop(paired);
 
         let mut sessions = self.sessions.lock().await;
-        sessions.entry(device_id.clone()).or_insert_with(|| PeerInfo {
-            device_id,
-            device_name,
-            addresses,
-            port,
-            state: PairingState::Discovered,
-            mode: None,
-            shared_secret: None,
-        });
+        sessions
+            .entry(device_id.clone())
+            .or_insert_with(|| PeerInfo {
+                device_id,
+                device_name,
+                addresses,
+                port,
+                state: PairingState::Discovered,
+                mode: None,
+                shared_secret: None,
+            });
     }
 
     /// Get all discovered (unpaired) peers.
@@ -229,11 +231,7 @@ impl PairingManager {
     }
 
     /// Confirm pairing with the OTP code from the remote side.
-    pub async fn confirm_pairing(
-        &self,
-        device_id: &str,
-        code: &str,
-    ) -> Result<(), PairingError> {
+    pub async fn confirm_pairing(&self, device_id: &str, code: &str) -> Result<(), PairingError> {
         // Validate OTP.
         let now = now_secs();
         let mut challenges = self.challenges.lock().await;
@@ -296,13 +294,8 @@ impl PairingManager {
         let device_id = format!("manual-{}", &uuid::Uuid::new_v4().to_string()[..8]);
         let device_name = format!("Manual ({}:{})", ip, port);
 
-        self.register_discovered(
-            device_id.clone(),
-            device_name,
-            vec![ip.to_string()],
-            port,
-        )
-        .await;
+        self.register_discovered(device_id.clone(), device_name, vec![ip.to_string()], port)
+            .await;
 
         device_id
     }
