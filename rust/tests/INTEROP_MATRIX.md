@@ -173,3 +173,46 @@ these vectors unchanged.
 Each vector ships with an adjacent `.md` sidecar that captures the source
 commit and per-vector invariants. Tests live in
 `rust/crates/clipsync-core/tests/protocol_compat.rs`.
+
+## Enterprise Backward Compatibility (Phase 2.14)
+
+Integration tests in `rust/apps/enterprise-server/tests/enterprise_compat.rs`
+prove that the enterprise server handles legacy and enterprise clients correctly.
+
+### Enterprise Compat Matrix
+
+| Scenario | Client Type | Hello Frame | Default Policy | Push | Receive | Test |
+|----------|-------------|:-----------:|:--------------:|:----:|:-------:|------|
+| Legacy Android v0.1.1 | Legacy | No | ReadWrite | Yes | Yes | `legacy_android_compat` |
+| Legacy Mac Swift | Legacy | No | ReadWrite | Yes | Yes | `legacy_mac_swift_compat` |
+| Enterprise Client | Enterprise | Yes (v2) | Per-device | Per-policy | Per-policy | `enterprise_client_full_path` |
+
+### Policy Enforcement Across Reconnects
+
+All 5 policies are tested with a connect-disconnect-reconnect cycle. The
+policy is pre-set in the runtime before the first connection and must
+survive both connections unchanged.
+
+| Policy | Can Push | Can Receive | Receive From Leader Only | Test |
+|--------|:--------:|:-----------:|:------------------------:|------|
+| ReadWrite | Yes | Yes | N/A | `policy_enforcement_read_write_across_reconnect` |
+| ReadOnly | No | Yes | N/A | `policy_enforcement_read_only_across_reconnect` |
+| WriteOnly | Yes | No | N/A | `policy_enforcement_write_only_across_reconnect` |
+| Muted | No | No | N/A | `policy_enforcement_muted_across_reconnect` |
+| FollowLeader | No | Yes (leader only) | Yes | `policy_enforcement_follow_leader_across_reconnect` |
+
+### Broadcast Multicast
+
+| Scenario | Clients | Payload Size | Verified | Test |
+|----------|:-------:|:------------:|:--------:|------|
+| Multicast broadcast | 3 receivers + 1 sender | 1 MB | Byte-identical delivery | `broadcast_multicast_identical_bytes` |
+
+### Handshake Protocol Contract
+
+- Legacy clients that send raw `ClipPayload` as first frame are accepted
+  with default `ReadWrite` policy. The first payload is not dropped.
+- Enterprise clients sending `Hello` with `protocol_version <= 2` receive
+  `Welcome` with `server_capabilities`, `your_policy`, and agreed version.
+- Enterprise clients with `protocol_version > CURRENT_PROTOCOL_VERSION`
+  receive `HandshakeError` with code `unsupported_version` and the
+  connection is closed.
