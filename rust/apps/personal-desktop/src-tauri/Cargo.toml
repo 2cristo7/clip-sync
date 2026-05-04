@@ -14,7 +14,7 @@ name = "clipsync-personal-tauri"
 path = "src/main.rs"
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-build = { version = "2", features = [] }
 clipsync-protocol = { path = "../../../crates/clipsync-protocol" }
 clipsync-transport = { path = "../../../crates/clipsync-transport" }
