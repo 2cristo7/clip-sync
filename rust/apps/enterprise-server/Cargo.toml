@@ -12,6 +12,7 @@ clipsync-protocol = { path = "../../crates/clipsync-protocol" }
 clipsync-crypto = { path = "../../crates/clipsync-crypto" }
 clipsync-transport = { path = "../../crates/clipsync-transport" }
 clipsync-storage = { path = "../../crates/clipsync-storage" }
+clipsync-policy = { path = "../../crates/clipsync-policy" }
 
 axum = { version = "0.8", features = ["ws"] }
 tokio = { version = "1", features = ["full"] }

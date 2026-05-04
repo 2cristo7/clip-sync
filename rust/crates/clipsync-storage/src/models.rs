@@ -8,6 +8,7 @@ pub struct Device {
     pub paired_at: String,
     pub last_seen: String,
     pub token_hash: String,
+    pub policy: String,
 }
 
 /// An authentication token associated with a device.

@@ -73,8 +73,8 @@ impl Database {
     ) -> Result<()> {
         let now = chrono::Utc::now().to_rfc3339();
         sqlx::query(
-            "INSERT INTO devices (id, name, fingerprint, role, paired_at, last_seen, token_hash)
-             VALUES (?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO devices (id, name, fingerprint, role, paired_at, last_seen, token_hash, policy)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
         )
         .bind(id)
         .bind(name)
@@ -83,6 +83,7 @@ impl Database {
         .bind(&now)
         .bind(&now)
         .bind(token_hash)
+        .bind(r#"{"mode":"read_write"}"#)
         .execute(&self.pool)
         .await?;
         Ok(())
@@ -126,6 +127,19 @@ impl Database {
             .fetch_optional(&self.pool)
             .await?
             .ok_or_else(|| StorageError::DeviceNotFound(format!("token_hash={token_hash}")))
+    }
+
+    /// Update the policy for a device.  Returns the updated [`Device`].
+    pub async fn update_device_policy(&self, id: &str, policy_json: &str) -> Result<Device> {
+        let result = sqlx::query("UPDATE devices SET policy = ? WHERE id = ?")
+            .bind(policy_json)
+            .bind(id)
+            .execute(&self.pool)
+            .await?;
+        if result.rows_affected() == 0 {
+            return Err(StorageError::DeviceNotFound(id.to_string()));
+        }
+        self.get_device(id).await
     }
 
     // -- Token operations ---------------------------------------------------

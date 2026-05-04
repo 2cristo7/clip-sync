@@ -59,6 +59,15 @@ impl DeviceRegistry {
         self.db.get_device(id).await
     }
 
+    /// Update the policy for a device.
+    pub async fn update_device_policy(
+        &self,
+        id: &str,
+        policy_json: &str,
+    ) -> Result<Device, StorageError> {
+        self.db.update_device_policy(id, policy_json).await
+    }
+
     /// Touch a device's `last_seen` timestamp.
     pub async fn touch_device(&self, id: &str) -> Result<(), StorageError> {
         self.db.update_last_seen(id).await

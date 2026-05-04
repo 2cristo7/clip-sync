@@ -1,5 +1,6 @@
 mod cli;
 mod config;
+mod policy_runtime;
 mod registry;
 mod ws_handler;
 
@@ -8,20 +9,22 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Duration;
 
-use axum::extract::{State, WebSocketUpgrade};
+use axum::extract::{Path, State, WebSocketUpgrade};
 use axum::response::IntoResponse;
-use axum::routing::get;
+use axum::routing::{get, put};
 use axum::Json;
 use clap::Parser;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tokio::sync::{mpsc, RwLock};
 use tracing::{error, info, warn};
 
 use clipsync_crypto::tls::{TlsIdentity, TlsPaths};
+use clipsync_policy::Policy;
 use clipsync_protocol::config::VERSION;
 
 use crate::cli::Cli;
 use crate::config::AppConfig;
+use crate::policy_runtime::PolicyRuntime;
 use crate::registry::DeviceRegistry;
 
 // ---------------------------------------------------------------------------
@@ -29,7 +32,6 @@ use crate::registry::DeviceRegistry;
 // ---------------------------------------------------------------------------
 
 struct WsClient {
-    #[allow(dead_code)]
     device: String,
     tx: mpsc::UnboundedSender<String>,
 }
@@ -56,6 +58,43 @@ impl WsHub {
         self.clients.write().await.remove(id);
     }
 
+    /// Broadcast a message to all connected clients, respecting policies.
+    /// `from_device_id` is the device label of the sender (used for
+    /// FollowLeader checks).
+    async fn broadcast_with_policy(
+        &self,
+        json: &str,
+        exclude: Option<&str>,
+        from_device_id: &str,
+        policy_runtime: &PolicyRuntime,
+    ) {
+        let clients = self.clients.read().await;
+        let mut stale = Vec::new();
+        for (id, client) in clients.iter() {
+            if exclude == Some(id.as_str()) {
+                continue;
+            }
+            // Check if recipient's policy allows receiving from sender
+            if !policy_runtime.can_receive(&client.device, from_device_id).await {
+                continue;
+            }
+            if client.tx.send(json.to_string()).is_err() {
+                stale.push(id.clone());
+            }
+        }
+        drop(clients);
+
+        if !stale.is_empty() {
+            let mut clients = self.clients.write().await;
+            for id in &stale {
+                clients.remove(id);
+                info!(client_id = %id, "removed stale ws client");
+            }
+        }
+    }
+
+    /// Legacy broadcast without policy checks (for backward compat paths).
+    #[allow(dead_code)]
     async fn broadcast(&self, json: &str, exclude: Option<&str>) {
         let clients = self.clients.read().await;
         let mut stale = Vec::new();
@@ -83,11 +122,11 @@ impl WsHub {
     }
 }
 
-struct AppState {
+pub(crate) struct AppState {
     ws_hub: WsHub,
     tls_identity: TlsIdentity,
-    #[allow(dead_code)]
     registry: DeviceRegistry,
+    policy_runtime: PolicyRuntime,
 }
 
 // ---------------------------------------------------------------------------
@@ -118,6 +157,52 @@ async fn ws_upgrade(
     ws: WebSocketUpgrade,
 ) -> impl IntoResponse {
     ws.on_upgrade(move |socket| ws_handler::handle_ws(socket, state))
+}
+
+// ---------------------------------------------------------------------------
+// Policy endpoint
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct UpdatePolicyRequest {
+    policy: Policy,
+}
+
+#[derive(Serialize)]
+struct DeviceResponse {
+    id: String,
+    name: String,
+    role: String,
+    policy: Policy,
+}
+
+async fn update_device_policy(
+    State(state): State<Arc<AppState>>,
+    Path(device_id): Path<String>,
+    Json(body): Json<UpdatePolicyRequest>,
+) -> Result<Json<DeviceResponse>, axum::http::StatusCode> {
+    let policy_json = body.policy.to_json_string();
+
+    let device = state
+        .registry
+        .update_device_policy(&device_id, &policy_json)
+        .await
+        .map_err(|e| {
+            warn!(error = %e, device_id = %device_id, "failed to update policy");
+            axum::http::StatusCode::NOT_FOUND
+        })?;
+
+    // Update live runtime immediately
+    state.policy_runtime.set_policy(&device_id, body.policy.clone()).await;
+
+    info!(device_id = %device_id, policy = %body.policy, "device policy updated via API");
+
+    Ok(Json(DeviceResponse {
+        id: device.id,
+        name: device.name,
+        role: device.role,
+        policy: body.policy,
+    }))
 }
 
 // ---------------------------------------------------------------------------
@@ -199,15 +284,21 @@ async fn main() {
         }
     };
 
+    // Policy runtime — load live policies from DB
+    let policy_runtime = PolicyRuntime::new();
+    policy_runtime.load_from_registry(&registry).await;
+
     let state = Arc::new(AppState {
         ws_hub: WsHub::default(),
         tls_identity,
         registry,
+        policy_runtime,
     });
 
     let app = axum::Router::new()
         .route("/health", get(health))
         .route("/ws", get(ws_upgrade))
+        .route("/devices/{id}/policy", put(update_device_policy))
         .with_state(state.clone());
 
     let addr = SocketAddr::from((cfg.bind, cfg.port));

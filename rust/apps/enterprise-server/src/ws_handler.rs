@@ -75,8 +75,9 @@ pub async fn handle_ws(socket: WebSocket, state: Arc<AppState>) {
                     "enterprise Hello received"
                 );
 
-                // Look up device policy from registry (default read_write)
-                let policy = "read_write".to_string();
+                // Look up device policy from runtime (default read_write)
+                let device_policy = state.policy_runtime.get_policy(&hello.device_id).await;
+                let policy = device_policy.to_string();
 
                 let server_id = hostname::get()
                     .map(|h| h.to_string_lossy().to_string())
@@ -134,7 +135,15 @@ pub async fn handle_ws(socket: WebSocket, state: Arc<AppState>) {
     // If we captured a first payload from a legacy client, broadcast it now
     if let Some(payload) = first_payload {
         if let Ok(json) = serde_json::to_string(&payload) {
-            state.ws_hub.broadcast(&json, Some(&client_id)).await;
+            state
+                .ws_hub
+                .broadcast_with_policy(
+                    &json,
+                    Some(&client_id),
+                    &device_label,
+                    &state.policy_runtime,
+                )
+                .await;
         }
     }
 
@@ -163,14 +172,23 @@ pub async fn handle_ws(socket: WebSocket, state: Arc<AppState>) {
         }
     });
 
-    // Inbound task: client → hub (broadcast)
+    // Inbound task: client → hub (broadcast with policy checks)
     let cid = client_id.clone();
+    let device_label_clone = device_label.clone();
     let state_clone = state.clone();
     let recv_task = tokio::spawn(async move {
         while let Some(Ok(msg)) = ws_rx.next().await {
             match msg {
                 Message::Text(text) => {
                     if let Ok(payload) = serde_json::from_str::<ClipPayload>(&text) {
+                        // Policy: check if this device can push
+                        if !state_clone.policy_runtime.can_push(&device_label_clone).await {
+                            warn!(
+                                device = %device_label_clone,
+                                "push rejected by policy"
+                            );
+                            continue;
+                        }
                         let json = match serde_json::to_string(&payload) {
                             Ok(j) => j,
                             Err(e) => {
@@ -178,7 +196,15 @@ pub async fn handle_ws(socket: WebSocket, state: Arc<AppState>) {
                                 continue;
                             }
                         };
-                        state_clone.ws_hub.broadcast(&json, Some(&cid)).await;
+                        state_clone
+                            .ws_hub
+                            .broadcast_with_policy(
+                                &json,
+                                Some(&cid),
+                                &device_label_clone,
+                                &state_clone.policy_runtime,
+                            )
+                            .await;
                     }
                 }
                 Message::Close(_) => break,

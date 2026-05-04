@@ -724,6 +724,15 @@ name = "clipsync-platform"
 version = "0.1.0"
 
 [[package]]
+name = "clipsync-policy"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "clipsync-protocol"
 version = "0.1.0"
 dependencies = [
@@ -1104,6 +1113,7 @@ dependencies = [
  "axum",
  "clap",
  "clipsync-crypto",
+ "clipsync-policy",
  "clipsync-protocol",
  "clipsync-storage",
  "clipsync-transport",
