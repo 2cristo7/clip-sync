@@ -1,5 +1,6 @@
 //! ClipSync Personal Desktop — Tauri 2 library crate.
 
+pub mod broadcast;
 pub mod discovery;
 pub mod mesh_hub;
 pub mod notifications;
@@ -79,6 +80,10 @@ pub fn run() {
             settings::update_setting,
             settings::reset_all,
             settings::get_debug_log,
+            broadcast::send_file,
+            broadcast::get_received_files,
+            broadcast::reveal_file,
+            broadcast::save_file,
         ])
         .setup(|app| {
             tray::init_tray(app.handle())?;
