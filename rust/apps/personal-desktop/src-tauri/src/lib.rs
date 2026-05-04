@@ -1,6 +1,8 @@
 //! ClipSync Personal Desktop — Tauri 2 library crate.
 
 pub mod discovery;
+pub mod mesh_hub;
+pub mod peer_link;
 
 use std::fs;
 use std::path::{Path, PathBuf};
