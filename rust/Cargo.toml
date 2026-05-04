@@ -13,4 +13,6 @@ members = [
     "legacy/clipsync-core",
     "legacy/clipsync-server",
     "legacy/clipsync-client",
+    # Personal desktop app — Tauri 2 shell (Phase 3.4)
+    "apps/personal-desktop/src-tauri",
 ]
