@@ -51,7 +51,10 @@ async fn stress_100_events_zero_duplicates() {
             duplicates_passed += 1;
         }
     }
-    assert_eq!(duplicates_passed, 0, "echo suppression must drop all 100 duplicates");
+    assert_eq!(
+        duplicates_passed, 0,
+        "echo suppression must drop all 100 duplicates"
+    );
 
     // Verify each non-originator peer received forwarded events.
     // peer-a originated events 0, 3, 6, ... (34 events). So peer-a should
@@ -61,19 +64,31 @@ async fn stress_100_events_zero_duplicates() {
         a_count += 1;
     }
     // peer-a should receive events NOT originated by peer-a = 66 or 67
-    assert!(a_count >= 66, "peer-a should receive at least 66 forwarded events, got {}", a_count);
+    assert!(
+        a_count >= 66,
+        "peer-a should receive at least 66 forwarded events, got {}",
+        a_count
+    );
 
     let mut b_count = 0u64;
     while handle_b.outgoing_rx.lock().await.try_recv().is_ok() {
         b_count += 1;
     }
-    assert!(b_count >= 66, "peer-b should receive at least 66 forwarded events, got {}", b_count);
+    assert!(
+        b_count >= 66,
+        "peer-b should receive at least 66 forwarded events, got {}",
+        b_count
+    );
 
     let mut c_count = 0u64;
     while handle_c.outgoing_rx.lock().await.try_recv().is_ok() {
         c_count += 1;
     }
-    assert!(c_count >= 66, "peer-c should receive at least 66 forwarded events, got {}", c_count);
+    assert!(
+        c_count >= 66,
+        "peer-c should receive at least 66 forwarded events, got {}",
+        c_count
+    );
 }
 
 #[tokio::test]

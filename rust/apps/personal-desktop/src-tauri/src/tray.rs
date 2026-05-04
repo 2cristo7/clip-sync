@@ -64,8 +64,7 @@ pub fn init_tray(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
 
     let icon = Image::from_path("icons/32x32.png").unwrap_or_else(|_| {
         // Fallback: use included bytes at compile time.
-        Image::from_bytes(include_bytes!("../icons/32x32.png"))
-            .expect("failed to load tray icon")
+        Image::from_bytes(include_bytes!("../icons/32x32.png")).expect("failed to load tray icon")
     });
 
     let _tray = TrayIconBuilder::new()

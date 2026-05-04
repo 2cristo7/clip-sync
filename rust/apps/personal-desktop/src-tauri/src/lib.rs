@@ -55,11 +55,7 @@ pub fn run() {
     let device_id = load_or_create_device_id(&cfg_path);
     let hostname = local_hostname();
 
-    let pairing_mgr = Arc::new(pairing::PairingManager::new(
-        device_id,
-        hostname,
-        &cfg_path,
-    ));
+    let pairing_mgr = Arc::new(pairing::PairingManager::new(device_id, hostname, &cfg_path));
 
     let settings_state = settings::init_settings_state();
 

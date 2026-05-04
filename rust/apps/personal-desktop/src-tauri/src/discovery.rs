@@ -134,8 +134,7 @@ impl MeshDiscovery {
     ///
     /// Returns an `AdvertiseGuard` that unregisters the service when dropped.
     pub fn advertise(&self) -> Result<AdvertiseGuard, DiscoveryError> {
-        let daemon =
-            ServiceDaemon::new().map_err(|e| DiscoveryError::Daemon(e.to_string()))?;
+        let daemon = ServiceDaemon::new().map_err(|e| DiscoveryError::Daemon(e.to_string()))?;
 
         let mut properties = HashMap::new();
         properties.insert(TXT_ROLE.to_string(), PEER_ROLE.to_string());
@@ -175,8 +174,7 @@ impl MeshDiscovery {
     /// This performs a one-shot scan for `timeout` duration and updates the
     /// internal peers list. Returns the current list of discovered peers.
     pub fn browse(&self, timeout: Duration) -> Result<Vec<DiscoveredPeer>, DiscoveryError> {
-        let daemon =
-            ServiceDaemon::new().map_err(|e| DiscoveryError::Daemon(e.to_string()))?;
+        let daemon = ServiceDaemon::new().map_err(|e| DiscoveryError::Daemon(e.to_string()))?;
 
         let service_type = MDNS_SERVICE_TYPE.trim_end_matches('.');
         let receiver = daemon
@@ -281,8 +279,7 @@ impl MeshDiscovery {
             .unwrap_or_default()
             .to_string();
 
-        let addresses: Vec<IpAddr> =
-            info.get_addresses().iter().copied().collect();
+        let addresses: Vec<IpAddr> = info.get_addresses().iter().copied().collect();
 
         let peer = DiscoveredPeer {
             device_id: device_id.clone(),
@@ -370,11 +367,7 @@ mod tests {
 
     #[test]
     fn device_id_accessor() {
-        let disc = MeshDiscovery::new(
-            "my-unique-id".to_string(),
-            "host.local.".to_string(),
-            7010,
-        );
+        let disc = MeshDiscovery::new("my-unique-id".to_string(), "host.local.".to_string(), 7010);
         assert_eq!(disc.device_id(), "my-unique-id");
     }
 }

@@ -189,7 +189,8 @@ mod tests {
 
     #[test]
     fn format_text_short() {
-        let (title, body) = format_notification("MyPhone", &ClipKind::Text("hello world".to_string()));
+        let (title, body) =
+            format_notification("MyPhone", &ClipKind::Text("hello world".to_string()));
         assert_eq!(title, "Clipboard from MyPhone");
         assert_eq!(body, "hello world");
     }

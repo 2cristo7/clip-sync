@@ -122,7 +122,10 @@ impl FileReceiver {
             stored_path: dest.to_string_lossy().to_string(),
         };
 
-        self.files.lock().await.insert(file.id.clone(), info.clone());
+        self.files
+            .lock()
+            .await
+            .insert(file.id.clone(), info.clone());
         info!(file_id = %file.id, name = %file.name, "file received and stored");
 
         Ok(info)
@@ -142,11 +145,7 @@ impl FileReceiver {
     }
 
     /// Save a received file to a user-chosen destination.
-    pub async fn save_to(
-        &self,
-        file_id: &str,
-        destination: &Path,
-    ) -> Result<(), BroadcastError> {
+    pub async fn save_to(&self, file_id: &str, destination: &Path) -> Result<(), BroadcastError> {
         let info = self
             .files
             .lock()
@@ -287,14 +286,10 @@ pub fn received_files_dir() -> PathBuf {
 
 /// Tauri command: send a file to selected peers.
 #[tauri::command]
-pub async fn send_file(
-    file_path: String,
-    peer_ids: Vec<String>,
-) -> Result<String, String> {
+pub async fn send_file(file_path: String, peer_ids: Vec<String>) -> Result<String, String> {
     let path = PathBuf::from(&file_path);
 
-    let broadcast = prepare_broadcast(&path, "local", "this-device")
-        .map_err(|e| e.to_string())?;
+    let broadcast = prepare_broadcast(&path, "local", "this-device").map_err(|e| e.to_string())?;
 
     let file_id = broadcast.id.clone();
     let payload = serde_json::to_string(&broadcast).map_err(|e| e.to_string())?;
@@ -411,7 +406,10 @@ mod tests {
     fn prepare_broadcast_file_not_found() {
         let result = prepare_broadcast(Path::new("/nonexistent/file.txt"), "dev-1", "Mac");
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), BroadcastError::FileNotFound(_)));
+        assert!(matches!(
+            result.unwrap_err(),
+            BroadcastError::FileNotFound(_)
+        ));
     }
 
     #[test]
@@ -423,14 +421,8 @@ mod tests {
 
     #[test]
     fn mime_detection() {
-        assert_eq!(
-            mime_from_extension(Path::new("photo.png")),
-            "image/png"
-        );
-        assert_eq!(
-            mime_from_extension(Path::new("doc.pdf")),
-            "application/pdf"
-        );
+        assert_eq!(mime_from_extension(Path::new("photo.png")), "image/png");
+        assert_eq!(mime_from_extension(Path::new("doc.pdf")), "application/pdf");
         assert_eq!(
             mime_from_extension(Path::new("data.xyz")),
             "application/octet-stream"

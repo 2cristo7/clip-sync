@@ -258,19 +258,11 @@ mod tests {
         hub.broadcast(event).await;
 
         // peer-b should have a message
-        let msg = handle_b
-            .outgoing_rx
-            .lock()
-            .await
-            .try_recv();
+        let msg = handle_b.outgoing_rx.lock().await.try_recv();
         assert!(msg.is_ok(), "peer-b should receive the broadcast");
 
         // peer-a should NOT have a message (it was the originator)
-        let msg = handle_a
-            .outgoing_rx
-            .lock()
-            .await
-            .try_recv();
+        let msg = handle_a.outgoing_rx.lock().await.try_recv();
         assert!(msg.is_err(), "peer-a (originator) should not receive");
     }
 

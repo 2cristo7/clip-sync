@@ -80,4 +80,4 @@ jobs:
       - name: Ad-hoc codesign (macOS)
         if: matrix.target == 'macos-arm64'
         run: |
-          find rust/apps/personal-desktop/target/release/bundle -name "*.app" -exec codesign --force --deep --sign - {} \;
+          find rust/target/release/bundle -name "*.app" -exec codesign --force --deep --sign - {} \;
