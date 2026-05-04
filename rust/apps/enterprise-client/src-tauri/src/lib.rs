@@ -50,18 +50,12 @@ fn get_policy_mode(state: tauri::State<AppState>) -> String {
 
 #[tauri::command]
 fn get_sync_paused(state: tauri::State<AppState>) -> bool {
-    *state
-        .sync_paused
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
+    *state.sync_paused.lock().unwrap_or_else(|e| e.into_inner())
 }
 
 #[tauri::command]
 fn toggle_sync(state: tauri::State<AppState>) -> bool {
-    let mut paused = state
-        .sync_paused
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
+    let mut paused = state.sync_paused.lock().unwrap_or_else(|e| e.into_inner());
     *paused = !*paused;
     *paused
 }
@@ -121,10 +115,7 @@ fn build_tray_menu(app: &tauri::App) -> tauri::Result<()> {
             }
             "pause_sync" => {
                 let state = app_handle.state::<AppState>();
-                let mut paused = state
-                    .sync_paused
-                    .lock()
-                    .unwrap_or_else(|e| e.into_inner());
+                let mut paused = state.sync_paused.lock().unwrap_or_else(|e| e.into_inner());
                 *paused = !*paused;
                 // Rebuild the menu to reflect new state will happen on next open
             }

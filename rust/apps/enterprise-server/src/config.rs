@@ -60,10 +60,7 @@ impl AppConfig {
 
         let port = cli.port.unwrap_or(file_cfg.server.port);
 
-        let bind_str = cli
-            .bind
-            .as_deref()
-            .unwrap_or(&file_cfg.server.bind);
+        let bind_str = cli.bind.as_deref().unwrap_or(&file_cfg.server.bind);
         let bind: IpAddr = bind_str
             .parse()
             .map_err(|_| ConfigError::InvalidBind(bind_str.to_string()))?;

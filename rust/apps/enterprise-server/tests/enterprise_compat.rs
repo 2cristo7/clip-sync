@@ -25,9 +25,7 @@ use tokio::sync::{mpsc, RwLock};
 
 use base64::Engine;
 use clipsync_policy::Policy;
-use clipsync_protocol::handshake::{
-    HandshakeError, Hello, Welcome, CURRENT_PROTOCOL_VERSION,
-};
+use clipsync_protocol::handshake::{HandshakeError, Hello, Welcome, CURRENT_PROTOCOL_VERSION};
 use clipsync_protocol::protocol::{ClipPayload, ClipType, DeviceRole};
 
 // ---------------------------------------------------------------------------
@@ -159,7 +157,9 @@ async fn test_ws_handler(socket: WebSocket, state: Arc<TestState>) {
                 };
 
                 if ws_tx
-                    .send(Message::Text(serde_json::to_string(&welcome).unwrap().into()))
+                    .send(Message::Text(
+                        serde_json::to_string(&welcome).unwrap().into(),
+                    ))
                     .await
                     .is_err()
                 {
@@ -379,7 +379,10 @@ async fn legacy_android_compat() {
     // Observer should receive the clipboard payload (legacy client gets
     // ReadWrite by default, so it can push)
     let received = recv_text_timeout(&mut observer_rx, 2000).await;
-    assert!(received.is_some(), "observer should receive clipboard from legacy android");
+    assert!(
+        received.is_some(),
+        "observer should receive clipboard from legacy android"
+    );
 
     let received_payload: ClipPayload = serde_json::from_str(&received.unwrap()).unwrap();
     assert_eq!(received_payload.clip_type, ClipType::Text);
@@ -470,11 +473,16 @@ async fn enterprise_client_full_path() {
 
     // Should receive Welcome with server capabilities and policy
     let welcome_text = recv_text_timeout(&mut client_rx, 2000).await;
-    assert!(welcome_text.is_some(), "enterprise client should receive Welcome");
+    assert!(
+        welcome_text.is_some(),
+        "enterprise client should receive Welcome"
+    );
 
     let welcome: Welcome = serde_json::from_str(&welcome_text.unwrap()).unwrap();
     assert_eq!(welcome.server_id, "test-server");
-    assert!(welcome.server_capabilities.contains(&"broadcast".to_string()));
+    assert!(welcome
+        .server_capabilities
+        .contains(&"broadcast".to_string()));
     assert!(welcome.server_capabilities.contains(&"policy".to_string()));
     assert!(welcome.server_capabilities.contains(&"audit".to_string()));
     assert_eq!(welcome.your_policy, "read_write");
@@ -604,7 +612,11 @@ async fn policy_enforcement_write_only_across_reconnect() {
             capabilities: vec![],
             protocol_version: CURRENT_PROTOCOL_VERSION,
         };
-        send_text(&mut pusher_tx, &serde_json::to_string(&pusher_hello).unwrap()).await;
+        send_text(
+            &mut pusher_tx,
+            &serde_json::to_string(&pusher_hello).unwrap(),
+        )
+        .await;
 
         tokio::time::sleep(Duration::from_millis(100)).await;
 
@@ -730,7 +742,11 @@ async fn policy_enforcement_follow_leader_across_reconnect() {
             capabilities: vec![],
             protocol_version: CURRENT_PROTOCOL_VERSION,
         };
-        send_text(&mut leader_tx, &serde_json::to_string(&leader_hello).unwrap()).await;
+        send_text(
+            &mut leader_tx,
+            &serde_json::to_string(&leader_hello).unwrap(),
+        )
+        .await;
 
         // Non-leader connects
         let (mut other_tx, mut _other_rx) = connect_ws(addr).await;
@@ -876,7 +892,11 @@ async fn broadcast_multicast_identical_bytes() {
         capabilities: vec!["broadcast".to_string()],
         protocol_version: CURRENT_PROTOCOL_VERSION,
     };
-    send_text(&mut sender_tx, &serde_json::to_string(&sender_hello).unwrap()).await;
+    send_text(
+        &mut sender_tx,
+        &serde_json::to_string(&sender_hello).unwrap(),
+    )
+    .await;
 
     tokio::time::sleep(Duration::from_millis(200)).await;
 

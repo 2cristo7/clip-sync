@@ -189,12 +189,14 @@ pub async fn post_broadcast(
 
     // Store file on disk for retry/offline delivery
     let broadcasts_dir = state.data_dir().join("broadcasts");
-    tokio::fs::create_dir_all(&broadcasts_dir).await.map_err(|e| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("failed to create broadcasts directory: {e}"),
-        )
-    })?;
+    tokio::fs::create_dir_all(&broadcasts_dir)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("failed to create broadcasts directory: {e}"),
+            )
+        })?;
     tokio::fs::write(broadcasts_dir.join(&broadcast_id), &raw_bytes)
         .await
         .map_err(|e| {
@@ -242,21 +244,26 @@ pub async fn post_broadcast(
     }
 
     // Audit: broadcast_sent
-    state.audit_log.log(
-        crate::audit::AuditEvent::broadcast_sent(
+    state
+        .audit_log
+        .log(crate::audit::AuditEvent::broadcast_sent(
             &sender_device_id,
             &broadcast_id,
             &target_device_ids,
             file_size,
-        ),
-    ).await;
+        ))
+        .await;
 
     // Audit: broadcast_delivered for each device that received it immediately
     for ds in &delivery_status {
         if ds.status == DeliveryState::Delivered {
-            state.audit_log.log(
-                crate::audit::AuditEvent::broadcast_delivered(&ds.device_id, &broadcast_id),
-            ).await;
+            state
+                .audit_log
+                .log(crate::audit::AuditEvent::broadcast_delivered(
+                    &ds.device_id,
+                    &broadcast_id,
+                ))
+                .await;
         }
     }
 
@@ -287,4 +294,3 @@ pub async fn post_broadcast(
         delivery_status,
     }))
 }
-

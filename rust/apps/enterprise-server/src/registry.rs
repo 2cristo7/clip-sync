@@ -86,10 +86,7 @@ impl DeviceRegistry {
     }
 
     /// Look up the device associated with a raw token.
-    pub async fn device_for_token(
-        &self,
-        raw_token: &str,
-    ) -> Result<Device, StorageError> {
+    pub async fn device_for_token(&self, raw_token: &str) -> Result<Device, StorageError> {
         let token_hash = db::hash_token(raw_token);
         self.db.get_device_by_token_hash(&token_hash).await
     }

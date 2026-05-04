@@ -24,9 +24,7 @@ pub enum Policy {
     /// Paired but no clipboard flow in either direction.
     Muted,
     /// Only receives clipboard from a specific device.
-    FollowLeader {
-        leader_device_id: String,
-    },
+    FollowLeader { leader_device_id: String },
 }
 
 impl Policy {

@@ -106,8 +106,7 @@ async fn policy_runtime_live_update() {
     use std::sync::Arc;
     use tokio::sync::RwLock;
 
-    let policies: Arc<RwLock<HashMap<String, Policy>>> =
-        Arc::new(RwLock::new(HashMap::new()));
+    let policies: Arc<RwLock<HashMap<String, Policy>>> = Arc::new(RwLock::new(HashMap::new()));
 
     // Default (not in map) should be ReadWrite
     let p = policies

@@ -21,9 +21,7 @@ use futures::{SinkExt, StreamExt};
 use tokio::sync::mpsc;
 use tracing::{info, warn};
 
-use clipsync_protocol::handshake::{
-    HandshakeError, Hello, Welcome, CURRENT_PROTOCOL_VERSION,
-};
+use clipsync_protocol::handshake::{HandshakeError, Hello, Welcome, CURRENT_PROTOCOL_VERSION};
 use clipsync_protocol::protocol::ClipPayload;
 use clipsync_transport::config::WS_PING_INTERVAL;
 
@@ -42,11 +40,8 @@ pub async fn handle_ws(socket: WebSocket, state: Arc<AppState>) {
     let device_label: String;
     let mut first_payload: Option<ClipPayload> = None;
 
-    let first_frame = tokio::time::timeout(
-        Duration::from_secs(5),
-        recv_text_frame(&mut ws_rx),
-    )
-    .await;
+    let first_frame =
+        tokio::time::timeout(Duration::from_secs(5), recv_text_frame(&mut ws_rx)).await;
 
     match first_frame {
         // Received a text frame in time
@@ -127,14 +122,14 @@ pub async fn handle_ws(socket: WebSocket, state: Arc<AppState>) {
     // -----------------------------------------------------------------------
     // Phase 2 — Register in hub + message loop
     // -----------------------------------------------------------------------
-    let client_id = state
-        .ws_hub
-        .register(device_label.clone(), tx)
-        .await;
+    let client_id = state.ws_hub.register(device_label.clone(), tx).await;
     info!(client_id = %client_id, device = %device_label, "ws client registered");
 
     // Audit: connection_opened
-    state.audit_log.log(AuditEvent::connection_opened(&device_label)).await;
+    state
+        .audit_log
+        .log(AuditEvent::connection_opened(&device_label))
+        .await;
 
     // Deliver any pending broadcasts queued while this device was offline
     state.ws_hub.deliver_pending_to_device(&device_label).await;
@@ -192,18 +187,14 @@ pub async fn handle_ws(socket: WebSocket, state: Arc<AppState>) {
                         if value.get("type").and_then(|v| v.as_str()) == Some("BroadcastFile") {
                             // BroadcastFile frames from clients are forwarded
                             // to their target_device_ids (server-side relay)
-                            if let Some(targets) = value
-                                .get("target_device_ids")
-                                .and_then(|v| v.as_array())
+                            if let Some(targets) =
+                                value.get("target_device_ids").and_then(|v| v.as_array())
                             {
                                 let target_ids: Vec<String> = targets
                                     .iter()
                                     .filter_map(|v| v.as_str().map(String::from))
                                     .collect();
-                                state_clone
-                                    .ws_hub
-                                    .send_to_devices(&target_ids, &text)
-                                    .await;
+                                state_clone.ws_hub.send_to_devices(&target_ids, &text).await;
                             }
                             continue;
                         }
@@ -211,7 +202,11 @@ pub async fn handle_ws(socket: WebSocket, state: Arc<AppState>) {
 
                     if let Ok(payload) = serde_json::from_str::<ClipPayload>(&text) {
                         // Policy: check if this device can push
-                        if !state_clone.policy_runtime.can_push(&device_label_clone).await {
+                        if !state_clone
+                            .policy_runtime
+                            .can_push(&device_label_clone)
+                            .await
+                        {
                             warn!(
                                 device = %device_label_clone,
                                 "push rejected by policy"
@@ -229,9 +224,14 @@ pub async fn handle_ws(socket: WebSocket, state: Arc<AppState>) {
                         // Audit: clipboard_pushed (hash the serialized JSON, never raw content)
                         let content_bytes = json.as_bytes();
                         let kind = format!("{:?}", payload.clip_type).to_lowercase();
-                        state_clone.audit_log.log(
-                            AuditEvent::clipboard_pushed(&device_label_clone, content_bytes, &kind),
-                        ).await;
+                        state_clone
+                            .audit_log
+                            .log(AuditEvent::clipboard_pushed(
+                                &device_label_clone,
+                                content_bytes,
+                                &kind,
+                            ))
+                            .await;
 
                         state_clone
                             .ws_hub
@@ -258,7 +258,10 @@ pub async fn handle_ws(socket: WebSocket, state: Arc<AppState>) {
     state.ws_hub.unregister(&client_id).await;
 
     // Audit: connection_closed
-    state.audit_log.log(AuditEvent::connection_closed(&device_label)).await;
+    state
+        .audit_log
+        .log(AuditEvent::connection_closed(&device_label))
+        .await;
 
     info!(client_id = %client_id, device = %device_label, "ws client disconnected");
 }

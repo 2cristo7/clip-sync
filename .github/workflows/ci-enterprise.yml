@@ -61,7 +61,7 @@ jobs:
             librsvg2-dev
 
       - name: Format check
-        run: cargo fmt --check --manifest-path rust/Cargo.toml
+        run: cargo fmt --all --check --manifest-path rust/Cargo.toml
 
       - name: Clippy
         run: cargo clippy --manifest-path rust/Cargo.toml --all-targets -- -D warnings

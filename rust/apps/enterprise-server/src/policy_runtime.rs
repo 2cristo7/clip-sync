@@ -52,7 +52,10 @@ impl PolicyRuntime {
     /// Set the policy for a device (called after DB update).
     pub async fn set_policy(&self, device_id: &str, policy: Policy) {
         info!(device_id = %device_id, policy = %policy, "policy updated in runtime");
-        self.inner.write().await.insert(device_id.to_string(), policy);
+        self.inner
+            .write()
+            .await
+            .insert(device_id.to_string(), policy);
     }
 
     /// Get the policy for a device, defaulting to ReadWrite if unknown.

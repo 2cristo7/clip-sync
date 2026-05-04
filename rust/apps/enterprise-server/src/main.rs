@@ -51,13 +51,10 @@ struct WsHub {
 impl WsHub {
     async fn register(&self, device: String, tx: mpsc::UnboundedSender<String>) -> String {
         let id = uuid::Uuid::new_v4().to_string();
-        self.clients.write().await.insert(
-            id.clone(),
-            WsClient {
-                device,
-                tx,
-            },
-        );
+        self.clients
+            .write()
+            .await
+            .insert(id.clone(), WsClient { device, tx });
         id
     }
 
@@ -82,7 +79,10 @@ impl WsHub {
                 continue;
             }
             // Check if recipient's policy allows receiving from sender
-            if !policy_runtime.can_receive(&client.device, from_device_id).await {
+            if !policy_runtime
+                .can_receive(&client.device, from_device_id)
+                .await
+            {
                 continue;
             }
             if client.tx.send(json.to_string()).is_err() {
@@ -287,10 +287,7 @@ async fn health(State(state): State<Arc<AppState>>) -> Json<HealthResponse> {
     })
 }
 
-async fn ws_upgrade(
-    State(state): State<Arc<AppState>>,
-    ws: WebSocketUpgrade,
-) -> impl IntoResponse {
+async fn ws_upgrade(State(state): State<Arc<AppState>>, ws: WebSocketUpgrade) -> impl IntoResponse {
     ws.on_upgrade(move |socket| ws_handler::handle_ws(socket, state))
 }
 
@@ -328,10 +325,16 @@ async fn update_device_policy(
         })?;
 
     // Update live runtime immediately
-    state.policy_runtime.set_policy(&device_id, body.policy.clone()).await;
+    state
+        .policy_runtime
+        .set_policy(&device_id, body.policy.clone())
+        .await;
 
     // Audit: policy_changed
-    state.audit_log.log(audit::AuditEvent::policy_changed(&device_id, &policy_json)).await;
+    state
+        .audit_log
+        .log(audit::AuditEvent::policy_changed(&device_id, &policy_json))
+        .await;
 
     info!(device_id = %device_id, policy = %body.policy, "device policy updated via API");
 
@@ -469,17 +472,21 @@ async fn main() {
     policy_runtime.load_from_registry(&registry).await;
 
     // Audit log — shares the same SQLite database as the registry
-    let audit_db = match clipsync_storage::db::Database::new(&cfg.data_dir.join("clipsync.db")).await {
-        Ok(db) => db,
-        Err(e) => {
-            error!(error = %e, "failed to open audit database");
-            std::process::exit(1);
-        }
-    };
+    let audit_db =
+        match clipsync_storage::db::Database::new(&cfg.data_dir.join("clipsync.db")).await {
+            Ok(db) => db,
+            Err(e) => {
+                error!(error = %e, "failed to open audit database");
+                std::process::exit(1);
+            }
+        };
     let audit_retention_days = cfg.audit_retention_days.unwrap_or(30);
     let audit_log = AuditLog::new(audit_db, audit_retention_days);
     audit::spawn_audit_purge_task(audit_log.clone());
-    info!(retention_days = audit_retention_days, "audit log initialised");
+    info!(
+        retention_days = audit_retention_days,
+        "audit log initialised"
+    );
 
     let state = Arc::new(AppState {
         ws_hub: WsHub::default(),

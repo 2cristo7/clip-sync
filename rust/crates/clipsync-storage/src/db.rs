@@ -147,26 +147,25 @@ impl Database {
     /// Store a new token record (token_id is the hash of the raw token).
     pub async fn store_token(&self, token_id: &str, device_id: &str) -> Result<()> {
         let now = chrono::Utc::now().to_rfc3339();
-        sqlx::query(
-            "INSERT INTO tokens (token_id, device_id, created_at) VALUES (?, ?, ?)",
-        )
-        .bind(token_id)
-        .bind(device_id)
-        .bind(&now)
-        .execute(&self.pool)
-        .await?;
+        sqlx::query("INSERT INTO tokens (token_id, device_id, created_at) VALUES (?, ?, ?)")
+            .bind(token_id)
+            .bind(device_id)
+            .bind(&now)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 
     /// Revoke a token by setting `revoked_at`.
     pub async fn revoke_token(&self, token_id: &str) -> Result<()> {
         let now = chrono::Utc::now().to_rfc3339();
-        let result =
-            sqlx::query("UPDATE tokens SET revoked_at = ? WHERE token_id = ? AND revoked_at IS NULL")
-                .bind(&now)
-                .bind(token_id)
-                .execute(&self.pool)
-                .await?;
+        let result = sqlx::query(
+            "UPDATE tokens SET revoked_at = ? WHERE token_id = ? AND revoked_at IS NULL",
+        )
+        .bind(&now)
+        .bind(token_id)
+        .execute(&self.pool)
+        .await?;
         if result.rows_affected() == 0 {
             return Err(StorageError::TokenNotFound(token_id.to_string()));
         }
@@ -439,13 +438,7 @@ mod tests {
 
         // Filter by time range
         let results = db
-            .query_audit(
-                Some("2026-01-01T01:00:00Z"),
-                None,
-                None,
-                None,
-                100,
-            )
+            .query_audit(Some("2026-01-01T01:00:00Z"), None, None, None, 100)
             .await
             .unwrap();
         assert_eq!(results.len(), 2);
@@ -471,10 +464,7 @@ mod tests {
             db.insert_audit_entry(&entry).await.unwrap();
         }
 
-        let purged = db
-            .purge_audit_before("2026-01-02T00:00:00Z")
-            .await
-            .unwrap();
+        let purged = db.purge_audit_before("2026-01-02T00:00:00Z").await.unwrap();
         assert_eq!(purged, 1);
 
         let remaining = db.query_audit(None, None, None, None, 100).await.unwrap();

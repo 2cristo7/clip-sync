@@ -49,13 +49,16 @@ impl AuditLog {
 
     /// Purge entries older than the configured retention period.
     pub async fn purge_expired(&self) {
-        let cutoff = chrono::Utc::now()
-            - chrono::Duration::days(self.retention_days as i64);
+        let cutoff = chrono::Utc::now() - chrono::Duration::days(self.retention_days as i64);
         let cutoff_str = cutoff.to_rfc3339();
 
         match self.db.purge_audit_before(&cutoff_str).await {
             Ok(n) if n > 0 => {
-                info!(purged = n, retention_days = self.retention_days, "audit entries purged");
+                info!(
+                    purged = n,
+                    retention_days = self.retention_days,
+                    "audit entries purged"
+                );
             }
             Ok(_) => {}
             Err(e) => {
