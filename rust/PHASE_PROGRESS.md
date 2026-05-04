@@ -98,3 +98,27 @@ Linux CI deps: libxcb-shape0-dev, libxcb-xfixes0-dev, libgtk-3-dev, libayatana-a
 Branch: feature/compat-tests from dev
 Added base64 + hex to server dev-dependencies for test assertions.
 Discovery: axum Json extractor has a default 2MB body limit separate from RequestBodyLimitLayer; tracked as tech debt.
+
+---
+
+# Plan 1: Rust Dev Resync — COMPLETE
+## Tasks
+- [x] 1.0 Archive native Mac/Android v0.1 lineage as `archive/native-mac-android-v0.1` (tip `7b59027f`)
+- [x] 1.1 CI split workflows — `ci-rust-core.yml`, `ci-android.yml`, `ci-mac.yml` with path filters
+- [x] 1.2 Protocol timestamps — `ClipPayload.ts` in milliseconds, HMAC `t=` in seconds
+- [x] 1.3 Inject error mapping — `/inject` returns `400 {"error":"decode_error","message":"..."}`
+- [x] 1.4 Rate limit pre-auth — token-bucket runs before auth middleware on `/pair` and `/inject`
+- [x] 1.5 Pairing 401 error bodies — `/pair` returns `{"error":"invalid"}` and friends
+- [x] 1.6 Port-in-use detection — actionable error on `EADDRINUSE`
+- [x] 1.7 Connection tuning — WS reconnect ladder, ping/pong, HTTP keep-alives
+- [x] 1.8 Compat vectors update — refreshed `rust/tests/compat/` for ms `ts` + error bodies
+- [x] 1.9 Workspace split — `clipsync-core`, `clipsync-server`, `clipsync-client`, `clipsync-protocol`
+- [x] 1.10 Protocol extensibility — `DeviceRole`, `PolicyHints`, versioned `Handshake` envelope
+- [x] 1.11 Resync tag + summary doc — `docs/phases/phase-rust-resync-summary.md`, tag `dev-v0.2-ready-for-fork`
+## Test Results
+`cargo fmt --all -- --check` clean, `cargo clippy --workspace --all-targets -- -D warnings` clean, `cargo test --workspace` passes. Each phase 1.1–1.10 also gated by `ci-rust-core.yml` on its phase branch before merge.
+## Notes
+Base: `dev` (forked from `main` after Phase 0). Merge style: `--no-ff` per phase.
+Tag `dev-v0.2-ready-for-fork` placed on `dev` HEAD after Phase 1.11 merges.
+**Plans 2 (next-gen Mac client) and 3 (next-gen Android client) fork from `dev-v0.2-ready-for-fork`.**
+Detailed per-phase narrative + merge SHAs: `docs/phases/phase-rust-resync-summary.md`.
