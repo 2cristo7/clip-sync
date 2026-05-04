@@ -19,6 +19,7 @@ pub struct ServerSection {
     pub bind: String,
     pub data_dir: Option<PathBuf>,
     pub log_level: String,
+    pub audit_retention_days: Option<u64>,
 }
 
 impl Default for ServerSection {
@@ -28,6 +29,7 @@ impl Default for ServerSection {
             bind: "0.0.0.0".to_string(),
             data_dir: None,
             log_level: "info".to_string(),
+            audit_retention_days: None,
         }
     }
 }
@@ -39,6 +41,7 @@ pub struct AppConfig {
     pub bind: IpAddr,
     pub data_dir: PathBuf,
     pub log_level: String,
+    pub audit_retention_days: Option<u64>,
 }
 
 fn default_data_dir() -> PathBuf {
@@ -77,11 +80,14 @@ impl AppConfig {
             file_cfg.server.log_level
         };
 
+        let audit_retention_days = file_cfg.server.audit_retention_days;
+
         Ok(Self {
             port,
             bind,
             data_dir,
             log_level,
+            audit_retention_days,
         })
     }
 }

@@ -1,3 +1,4 @@
+mod audit;
 mod cli;
 mod config;
 mod policy_runtime;
@@ -23,6 +24,7 @@ use clipsync_crypto::tls::{TlsIdentity, TlsPaths};
 use clipsync_policy::Policy;
 use clipsync_protocol::config::VERSION;
 
+use crate::audit::AuditLog;
 use crate::cli::Cli;
 use crate::config::AppConfig;
 use crate::policy_runtime::PolicyRuntime;
@@ -253,6 +255,7 @@ pub(crate) struct AppState {
     registry: DeviceRegistry,
     policy_runtime: PolicyRuntime,
     data_dir: std::path::PathBuf,
+    pub(crate) audit_log: AuditLog,
 }
 
 impl AppState {
@@ -327,6 +330,9 @@ async fn update_device_policy(
     // Update live runtime immediately
     state.policy_runtime.set_policy(&device_id, body.policy.clone()).await;
 
+    // Audit: policy_changed
+    state.audit_log.log(audit::AuditEvent::policy_changed(&device_id, &policy_json)).await;
+
     info!(device_id = %device_id, policy = %body.policy, "device policy updated via API");
 
     Ok(Json(DeviceResponse {
@@ -335,6 +341,44 @@ async fn update_device_policy(
         role: device.role,
         policy: body.policy,
     }))
+}
+
+// ---------------------------------------------------------------------------
+// Audit query endpoint
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct AuditQueryParams {
+    from: Option<String>,
+    to: Option<String>,
+    device_id: Option<String>,
+    event_type: Option<String>,
+    limit: Option<u32>,
+}
+
+async fn get_audit(
+    State(state): State<Arc<AppState>>,
+    axum::extract::Query(params): axum::extract::Query<AuditQueryParams>,
+) -> Result<Json<Vec<clipsync_storage::models::AuditEntry>>, axum::http::StatusCode> {
+    let limit = params.limit.unwrap_or(100).min(1000);
+
+    let entries = state
+        .audit_log
+        .db()
+        .query_audit(
+            params.from.as_deref(),
+            params.to.as_deref(),
+            params.device_id.as_deref(),
+            params.event_type.as_deref(),
+            limit,
+        )
+        .await
+        .map_err(|e| {
+            warn!(error = %e, "audit query failed");
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    Ok(Json(entries))
 }
 
 // ---------------------------------------------------------------------------
@@ -424,12 +468,26 @@ async fn main() {
     let policy_runtime = PolicyRuntime::new();
     policy_runtime.load_from_registry(&registry).await;
 
+    // Audit log — shares the same SQLite database as the registry
+    let audit_db = match clipsync_storage::db::Database::new(&cfg.data_dir.join("clipsync.db")).await {
+        Ok(db) => db,
+        Err(e) => {
+            error!(error = %e, "failed to open audit database");
+            std::process::exit(1);
+        }
+    };
+    let audit_retention_days = cfg.audit_retention_days.unwrap_or(30);
+    let audit_log = AuditLog::new(audit_db, audit_retention_days);
+    audit::spawn_audit_purge_task(audit_log.clone());
+    info!(retention_days = audit_retention_days, "audit log initialised");
+
     let state = Arc::new(AppState {
         ws_hub: WsHub::default(),
         tls_identity,
         registry,
         policy_runtime,
         data_dir: cfg.data_dir.clone(),
+        audit_log,
     });
 
     // Spawn background task to expire old broadcasts
@@ -462,6 +520,7 @@ async fn main() {
         .route("/ws", get(ws_upgrade))
         .route("/devices/{id}/policy", put(update_device_policy))
         .route("/broadcast", post(routes::broadcast::post_broadcast))
+        .route("/audit", get(get_audit))
         .with_state(state.clone());
 
     let addr = SocketAddr::from((cfg.bind, cfg.port));

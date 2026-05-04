@@ -27,6 +27,7 @@ use clipsync_protocol::handshake::{
 use clipsync_protocol::protocol::ClipPayload;
 use clipsync_transport::config::WS_PING_INTERVAL;
 
+use crate::audit::AuditEvent;
 use crate::AppState;
 
 /// Drive a single WebSocket connection through the handshake and then
@@ -132,6 +133,9 @@ pub async fn handle_ws(socket: WebSocket, state: Arc<AppState>) {
         .await;
     info!(client_id = %client_id, device = %device_label, "ws client registered");
 
+    // Audit: connection_opened
+    state.audit_log.log(AuditEvent::connection_opened(&device_label)).await;
+
     // Deliver any pending broadcasts queued while this device was offline
     state.ws_hub.deliver_pending_to_device(&device_label).await;
 
@@ -221,6 +225,14 @@ pub async fn handle_ws(socket: WebSocket, state: Arc<AppState>) {
                                 continue;
                             }
                         };
+
+                        // Audit: clipboard_pushed (hash the serialized JSON, never raw content)
+                        let content_bytes = json.as_bytes();
+                        let kind = format!("{:?}", payload.clip_type).to_lowercase();
+                        state_clone.audit_log.log(
+                            AuditEvent::clipboard_pushed(&device_label_clone, content_bytes, &kind),
+                        ).await;
+
                         state_clone
                             .ws_hub
                             .broadcast_with_policy(
@@ -244,6 +256,10 @@ pub async fn handle_ws(socket: WebSocket, state: Arc<AppState>) {
     }
 
     state.ws_hub.unregister(&client_id).await;
+
+    // Audit: connection_closed
+    state.audit_log.log(AuditEvent::connection_closed(&device_label)).await;
+
     info!(client_id = %client_id, device = %device_label, "ws client disconnected");
 }
 

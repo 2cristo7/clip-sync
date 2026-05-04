@@ -5,7 +5,7 @@ use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use sqlx::SqlitePool;
 use tracing::info;
 
-use crate::models::{Device, Token};
+use crate::models::{AuditEntry, Device, Token};
 
 // ---------------------------------------------------------------------------
 // Error type
@@ -184,6 +184,75 @@ impl Database {
         Ok(row.is_some())
     }
 
+    // -- Audit operations ---------------------------------------------------
+
+    /// Insert a new audit entry.
+    pub async fn insert_audit_entry(&self, entry: &AuditEntry) -> Result<()> {
+        sqlx::query(
+            "INSERT INTO audit (id, ts, event_type, device_id, payload_summary, metadata_json)
+             VALUES (?, ?, ?, ?, ?, ?)",
+        )
+        .bind(&entry.id)
+        .bind(&entry.ts)
+        .bind(&entry.event_type)
+        .bind(&entry.device_id)
+        .bind(&entry.payload_summary)
+        .bind(&entry.metadata_json)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    /// Query audit entries with optional filters and pagination.
+    pub async fn query_audit(
+        &self,
+        from: Option<&str>,
+        to: Option<&str>,
+        device_id: Option<&str>,
+        event_type: Option<&str>,
+        limit: u32,
+    ) -> Result<Vec<AuditEntry>> {
+        let mut sql = String::from("SELECT * FROM audit WHERE 1=1");
+        let mut binds: Vec<String> = Vec::new();
+
+        if let Some(f) = from {
+            sql.push_str(" AND ts >= ?");
+            binds.push(f.to_string());
+        }
+        if let Some(t) = to {
+            sql.push_str(" AND ts <= ?");
+            binds.push(t.to_string());
+        }
+        if let Some(d) = device_id {
+            sql.push_str(" AND device_id = ?");
+            binds.push(d.to_string());
+        }
+        if let Some(e) = event_type {
+            sql.push_str(" AND event_type = ?");
+            binds.push(e.to_string());
+        }
+
+        sql.push_str(" ORDER BY ts DESC LIMIT ?");
+
+        let mut query = sqlx::query_as::<_, AuditEntry>(&sql);
+        for b in &binds {
+            query = query.bind(b);
+        }
+        query = query.bind(limit);
+
+        let entries = query.fetch_all(&self.pool).await?;
+        Ok(entries)
+    }
+
+    /// Delete audit entries older than the given RFC 3339 timestamp.
+    pub async fn purge_audit_before(&self, before_ts: &str) -> Result<u64> {
+        let result = sqlx::query("DELETE FROM audit WHERE ts < ?")
+            .bind(before_ts)
+            .execute(&self.pool)
+            .await?;
+        Ok(result.rows_affected())
+    }
+
     /// Get the underlying pool (for testing or advanced use).
     pub fn pool(&self) -> &SqlitePool {
         &self.pool
@@ -320,5 +389,119 @@ mod tests {
         let h2 = hash_token("same-input");
         assert_eq!(h1, h2);
         assert_ne!(h1, hash_token("different-input"));
+    }
+
+    #[tokio::test]
+    async fn test_insert_and_query_audit() {
+        let (db, _dir) = setup_db().await;
+
+        let entry = AuditEntry {
+            id: "audit-1".to_string(),
+            ts: "2026-01-01T00:00:00Z".to_string(),
+            event_type: "clipboard_pushed".to_string(),
+            device_id: "dev-1".to_string(),
+            payload_summary: Some("sha256:abc123 size=42 kind=text".to_string()),
+            metadata_json: Some(r#"{"extra":"data"}"#.to_string()),
+        };
+        db.insert_audit_entry(&entry).await.unwrap();
+
+        let results = db.query_audit(None, None, None, None, 100).await.unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].event_type, "clipboard_pushed");
+        assert_eq!(results[0].device_id, "dev-1");
+    }
+
+    #[tokio::test]
+    async fn test_query_audit_filters() {
+        let (db, _dir) = setup_db().await;
+
+        for (i, etype) in ["clipboard_pushed", "connection_opened", "clipboard_pushed"]
+            .iter()
+            .enumerate()
+        {
+            let entry = AuditEntry {
+                id: format!("audit-{i}"),
+                ts: format!("2026-01-01T0{i}:00:00Z"),
+                event_type: etype.to_string(),
+                device_id: "dev-1".to_string(),
+                payload_summary: None,
+                metadata_json: None,
+            };
+            db.insert_audit_entry(&entry).await.unwrap();
+        }
+
+        // Filter by event_type
+        let results = db
+            .query_audit(None, None, None, Some("clipboard_pushed"), 100)
+            .await
+            .unwrap();
+        assert_eq!(results.len(), 2);
+
+        // Filter by time range
+        let results = db
+            .query_audit(
+                Some("2026-01-01T01:00:00Z"),
+                None,
+                None,
+                None,
+                100,
+            )
+            .await
+            .unwrap();
+        assert_eq!(results.len(), 2);
+
+        // Limit
+        let results = db.query_audit(None, None, None, None, 1).await.unwrap();
+        assert_eq!(results.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_purge_audit_before() {
+        let (db, _dir) = setup_db().await;
+
+        for i in 0..3 {
+            let entry = AuditEntry {
+                id: format!("audit-{i}"),
+                ts: format!("2026-01-0{}T00:00:00Z", i + 1),
+                event_type: "clipboard_pushed".to_string(),
+                device_id: "dev-1".to_string(),
+                payload_summary: None,
+                metadata_json: None,
+            };
+            db.insert_audit_entry(&entry).await.unwrap();
+        }
+
+        let purged = db
+            .purge_audit_before("2026-01-02T00:00:00Z")
+            .await
+            .unwrap();
+        assert_eq!(purged, 1);
+
+        let remaining = db.query_audit(None, None, None, None, 100).await.unwrap();
+        assert_eq!(remaining.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_audit_entry_no_raw_content() {
+        let (db, _dir) = setup_db().await;
+
+        // Simulate an audit entry — payload_summary has hash, NOT raw content
+        let entry = AuditEntry {
+            id: "audit-privacy".to_string(),
+            ts: "2026-01-01T00:00:00Z".to_string(),
+            event_type: "clipboard_pushed".to_string(),
+            device_id: "dev-1".to_string(),
+            payload_summary: Some("sha256:deadbeef size=100 kind=text".to_string()),
+            metadata_json: None,
+        };
+        db.insert_audit_entry(&entry).await.unwrap();
+
+        let results = db.query_audit(None, None, None, None, 100).await.unwrap();
+        let summary = results[0].payload_summary.as_ref().unwrap();
+
+        // Must not contain raw text — only hash + size + kind
+        assert!(summary.starts_with("sha256:"));
+        assert!(summary.contains("size="));
+        assert!(summary.contains("kind="));
     }
 }

@@ -241,8 +241,24 @@ pub async fn post_broadcast(
         state.ws_hub.queue_pending_broadcast(pb).await;
     }
 
-    // Audit hook placeholder (Phase 2.6)
-    audit_broadcast_hook(&broadcast_id, &sender_device_id, &target_device_ids, file_size);
+    // Audit: broadcast_sent
+    state.audit_log.log(
+        crate::audit::AuditEvent::broadcast_sent(
+            &sender_device_id,
+            &broadcast_id,
+            &target_device_ids,
+            file_size,
+        ),
+    ).await;
+
+    // Audit: broadcast_delivered for each device that received it immediately
+    for ds in &delivery_status {
+        if ds.status == DeliveryState::Delivered {
+            state.audit_log.log(
+                crate::audit::AuditEvent::broadcast_delivered(&ds.device_id, &broadcast_id),
+            ).await;
+        }
+    }
 
     // Emit delivery status event over WS to sender
     let status_event = serde_json::json!({
@@ -272,18 +288,3 @@ pub async fn post_broadcast(
     }))
 }
 
-/// Placeholder audit hook — will be implemented in Phase 2.6.
-fn audit_broadcast_hook(
-    broadcast_id: &str,
-    sender_device_id: &str,
-    target_device_ids: &[String],
-    file_size: usize,
-) {
-    info!(
-        broadcast_id = %broadcast_id,
-        sender = %sender_device_id,
-        targets = ?target_device_ids,
-        size = file_size,
-        "AUDIT_HOOK: broadcast event (Phase 2.6 will persist this)"
-    );
-}

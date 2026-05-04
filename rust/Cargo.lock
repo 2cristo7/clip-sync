@@ -786,6 +786,8 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "hex",
+ "serde",
+ "serde_json",
  "sha2",
  "sqlx",
  "tempfile",
@@ -1122,6 +1124,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "base64",
+ "chrono",
  "clap",
  "clipsync-crypto",
  "clipsync-policy",
@@ -1130,6 +1133,7 @@ dependencies = [
  "clipsync-transport",
  "dirs",
  "futures",
+ "hex",
  "hostname",
  "hyper",
  "hyper-util",
@@ -1137,6 +1141,7 @@ dependencies = [
  "rustls",
  "serde",
  "serde_json",
+ "sha2",
  "tokio",
  "tokio-rustls",
  "toml",

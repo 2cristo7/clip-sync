@@ -19,3 +19,14 @@ pub struct Token {
     pub created_at: String,
     pub revoked_at: Option<String>,
 }
+
+/// An audit log entry.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, sqlx::FromRow)]
+pub struct AuditEntry {
+    pub id: String,
+    pub ts: String,
+    pub event_type: String,
+    pub device_id: String,
+    pub payload_summary: Option<String>,
+    pub metadata_json: Option<String>,
+}
