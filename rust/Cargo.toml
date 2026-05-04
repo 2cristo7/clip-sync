@@ -13,6 +13,8 @@ members = [
     "crates/clipsync-storage",
     # Enterprise binary crate (Phase 2.1).
     "apps/enterprise-server",
+    # Enterprise desktop dashboard (Phase 2.7).
+    "apps/enterprise-desktop/src-tauri",
     # Legacy crates kept as transitional re-export shells until the
     # `apps/` desktop shells land. Source moved physically under
     # `legacy/` to make their pending removal obvious.
