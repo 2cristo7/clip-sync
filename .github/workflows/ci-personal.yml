@@ -57,7 +57,10 @@ jobs:
             libxcb-xfixes0-dev \
             libgtk-3-dev \
             libayatana-appindicator3-dev \
-            libxdo-dev
+            libxdo-dev \
+            libwebkit2gtk-4.1-dev \
+            libjavascriptcoregtk-4.1-dev \
+            libsoup-3.0-dev
 
       - name: Format check
         run: cargo fmt --all -- --check
