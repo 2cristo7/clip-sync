@@ -36,3 +36,20 @@ tower = "0.5"
 sha2 = "0.10"
 hex = "0.4"
 chrono = "0.4"
+
+[package.metadata.deb]
+name = "clipsync-enterprise-server"
+maintainer = "ClipSync <osixtechteam@gmail.com>"
+depends = "$auto"
+section = "net"
+assets = [
+  ["target/release/enterprise-server", "usr/bin/clipsync-enterprise-server", "755"],
+  ["packaging/clipsync-enterprise.service", "lib/systemd/system/clipsync-enterprise.service", "644"],
+]
+
+[package.metadata.generate-rpm]
+name = "clipsync-enterprise-server"
+assets = [
+  { source = "target/release/enterprise-server", dest = "/usr/bin/clipsync-enterprise-server", mode = "755" },
+  { source = "packaging/clipsync-enterprise.service", dest = "/lib/systemd/system/clipsync-enterprise.service", mode = "644" },
+]
