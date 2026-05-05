@@ -14,6 +14,7 @@ import com.clipsync.util.L
 import androidx.core.app.NotificationCompat
 import com.clipsync.app.R
 import com.clipsync.clipboard.ClipboardWriter
+import com.clipsync.discovery.NsdDiscovery
 import com.clipsync.images.ImageCache
 import android.util.Base64
 import com.clipsync.model.ClipPayload
@@ -25,6 +26,12 @@ import com.clipsync.overlay.SendClipActivity
 import com.clipsync.screenshot.ScreenshotObserver
 import com.clipsync.shizuku.ShizukuClipboardManager
 import com.clipsync.storage.Prefs
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.firstOrNull
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.WebSocket
 import kotlin.math.min
 
@@ -51,6 +58,9 @@ class ClipForegroundService : Service() {
     private val reconnectRunnable = Runnable { connect() }
 
     private var networkObserver: NetworkChangeObserver? = null
+    private var nsdDiscovery: NsdDiscovery? = null
+    private val serviceScope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private var consecutiveFailuresOnHost = 0
     private var clipboardManager: ClipboardManager? = null
     private var screenshotObserver: ScreenshotObserver? = null
     private var clipListenerRegistered = false
@@ -130,10 +140,9 @@ class ClipForegroundService : Service() {
         startForeground(NOTIF_ID, buildNotification("Connected"))
         @Suppress("DEPRECATION")
         stopForeground(true)
+        nsdDiscovery = NsdDiscovery(this)
         networkObserver = NetworkChangeObserver(this) {
-            backoffMs = INITIAL_BACKOFF_MS
-            handler.removeCallbacks(reconnectRunnable)
-            handler.post(reconnectRunnable)
+            rediscoverThenReconnect()
         }
         networkObserver?.register()
         clipboardManager = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -164,6 +173,7 @@ class ClipForegroundService : Service() {
     }
 
     override fun onDestroy() {
+        serviceScope.coroutineContext[kotlinx.coroutines.Job]?.cancel()
         screenshotObserver?.unregister()
         screenshotObserver = null
         networkObserver?.unregister()
@@ -202,6 +212,7 @@ class ClipForegroundService : Service() {
                 when (status) {
                     is ClipClient.WsStatus.Open -> {
                         backoffMs = INITIAL_BACKOFF_MS
+                        consecutiveFailuresOnHost = 0
                         L.event("WS", "connected host=$host")
                         startForeground(NOTIF_ID, buildNotification("Connected to $host"))
                         handler.post {
@@ -211,6 +222,7 @@ class ClipForegroundService : Service() {
                         }
                     }
                     is ClipClient.WsStatus.Closed -> {
+                        consecutiveFailuresOnHost++
                         L.event("WS", "closed host=$host code=${status.code}")
                         @Suppress("DEPRECATION")
                         stopForeground(true)
@@ -222,6 +234,7 @@ class ClipForegroundService : Service() {
                         scheduleReconnect()
                     }
                     is ClipClient.WsStatus.Error -> {
+                        consecutiveFailuresOnHost++
                         L.warn("WS", "error host=$host msg=${status.message}")
                         @Suppress("DEPRECATION")
                         stopForeground(true)
@@ -329,10 +342,39 @@ class ClipForegroundService : Service() {
         L.event(M, "clipboard listener unregistered")
     }
 
+    private fun rediscoverThenReconnect() {
+        if (prefs.fp.isNullOrEmpty()) {
+            handler.post(reconnectRunnable)
+            return
+        }
+        serviceScope.launch {
+            val fp = prefs.fp ?: return@launch
+            val discovered = withTimeoutOrNull(5_000L) {
+                nsdDiscovery?.discover()?.firstOrNull { it.fp == fp }
+            }
+            if (discovered != null) {
+                if (discovered.host != prefs.host || discovered.port != prefs.port) {
+                    prefs.host = discovered.host
+                    prefs.port = discovered.port
+                    L.event(M, "Host updated via rediscovery: ${discovered.host}:${discovered.port}")
+                }
+            }
+            backoffMs = INITIAL_BACKOFF_MS
+            handler.removeCallbacks(reconnectRunnable)
+            handler.post(reconnectRunnable)
+        }
+    }
+
     private fun scheduleReconnect() {
         handler.removeCallbacks(reconnectRunnable)
         val delay = backoffMs
         backoffMs = min(backoffMs * 2, MAX_BACKOFF_MS)
+        if (consecutiveFailuresOnHost >= 3) {
+            consecutiveFailuresOnHost = 0
+            L.event(M, "3 consecutive failures — rediscovering host")
+            rediscoverThenReconnect()
+            return
+        }
         L.event(M, "reconnect in ${delay}ms")
         handler.postDelayed(reconnectRunnable, delay)
     }
